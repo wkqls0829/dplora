@@ -58,6 +58,8 @@ def load_data(path, name, rank, num_splits, tokenizer_ckpt, teacher_data_pct=Non
     else:
         num_clients = num_splits - 1
         # just math to determine how much data the clients get
+        # split_start = teacher_data_pct + (1) * (100 - teacher_data_pct) // num_clients
+        # split_end = teacher_data_pct + (2) * (100 - teacher_data_pct) // num_clients
         split_start = teacher_data_pct + (rank - 1) * (100 - teacher_data_pct) // num_clients
         split_end = teacher_data_pct + (rank) * (100 - teacher_data_pct) // num_clients
         split = f"{split_start}%:{split_end}%"

@@ -16,9 +16,15 @@ class Args:
     teacher_data_pct: int
     client_lr: float
     distill_lr: float
+    lda: float
+    gamma: float
     rank: int
+    local_r: int
     data_path: str
     data_name: str
+    device: int
+    mode: str
+    projection_type: str
 
 
 def parse_args() -> Args:
@@ -32,16 +38,23 @@ def parse_args() -> Args:
     parser.add_argument('--client_epochs', type=int, default=1)
     parser.add_argument('--teacher_pretrain_epochs', type=int, default=1)
     parser.add_argument('--kd_epochs', type=int, default=1)
+    parser.add_argument('--device', type=int, default=0)
     parser.add_argument('--teacher_ckpt', type=str, default="bert-base-uncased")
     parser.add_argument('--client_ckpt', type=str, default="distilbert-base-uncased")
 
     parser.add_argument('--client_lr', type=float, default=5e-5)
     parser.add_argument('--distill_lr', type=float, default=5e-5)
+    
+    parser.add_argument('--lda', type=float, default=0.1)
+    parser.add_argument('--gamma', type=float, default=0.95)
 
     parser.add_argument('--rank', type=int, default=0)
+    parser.add_argument('--local_r', type=int, default=0)
 
     parser.add_argument('--data_path', type=str, default="glue")
     parser.add_argument('--data_name', type=str, default="cola")
+    parser.add_argument('--mode', type=str, default="lora")
+    parser.add_argument('--projection_type', type=str, default="type of projection for pd lora")
 
     # Parse the command-line arguments
     args = parser.parse_args()

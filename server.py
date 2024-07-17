@@ -14,6 +14,8 @@ def weighted_average(metrics):
     # Multiply accuracy of each client by number of examples used
     accuracies = [num_examples * m["accuracy"] for num_examples, m in metrics]
     examples = [num_examples for num_examples, _ in metrics]
+    for i in range(len(accuracies)):
+        print(f"accuracy of client i is {accuracies[i] / examples[i]}")
 
     # Aggregate and return custom metric (weighted average)
     return {"accuracy": sum(accuracies) / sum(examples)}
@@ -30,7 +32,7 @@ if __name__ == "__main__":
     # Start server
     t1 = time.perf_counter()
     history = fl.server.start_server(
-        server_address="0.0.0.0:8080",
+        server_address="0.0.0.0:8090",
         config=fl.server.ServerConfig(num_rounds=args.num_rounds),
         strategy=strategy,
     )
