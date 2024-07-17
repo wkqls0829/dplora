@@ -265,8 +265,7 @@ def main():
                     return [range(args.local_r) for _ in range(len(peft_state_dict_keys)//2)]
                 for k, v in state_dict.items():
                     if "lora_B" in k:
-                        print(torch.topk(torch.norm(prev_state_dict[k] - v, dim=1), args.local_r))
-                        projection_basis.append(list(torch.topk(torch.norm(prev_state_dict[k] - v, dim=1), args.local_r).indices))
+                        projection_basis.append(list(torch.topk(torch.norm(prev_state_dict[k] - v, dim=1)[:args.lora_r], args.local_r).indices))
 
 
             else:

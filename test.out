@@ -44,8 +44,8 @@ WARNING:flwr:No fit_metrics_aggregation_fn provided
 INFO:flwr:configure_evaluate: strategy sampled 2 clients (out of 2)
 [92mINFO [0m:      aggregate_evaluate: received 2 results and 0 failures
 INFO:flwr:aggregate_evaluate: received 2 results and 0 failures
-accuracy of client i is 0.8486238532110092
-accuracy of client i is 0.8486238532110092
+accuracy of client i is 0.8474770642201835
+accuracy of client i is 0.8474770642201835
 [92mINFO [0m:      
 INFO:flwr:
 [92mINFO [0m:      [ROUND 2]
@@ -58,8 +58,8 @@ INFO:flwr:aggregate_fit: received 2 results and 0 failures
 INFO:flwr:configure_evaluate: strategy sampled 2 clients (out of 2)
 [92mINFO [0m:      aggregate_evaluate: received 2 results and 0 failures
 INFO:flwr:aggregate_evaluate: received 2 results and 0 failures
-accuracy of client i is 0.8669724770642203
-accuracy of client i is 0.8669724770642203
+accuracy of client i is 0.8692660550458715
+accuracy of client i is 0.8692660550458715
 [92mINFO [0m:      
 INFO:flwr:
 [92mINFO [0m:      [ROUND 3]
@@ -72,30 +72,30 @@ INFO:flwr:aggregate_fit: received 2 results and 0 failures
 INFO:flwr:configure_evaluate: strategy sampled 2 clients (out of 2)
 [92mINFO [0m:      aggregate_evaluate: received 2 results and 0 failures
 INFO:flwr:aggregate_evaluate: received 2 results and 0 failures
-accuracy of client i is 0.8784403669724771
-accuracy of client i is 0.8784403669724771
+accuracy of client i is 0.8772935779816514
+accuracy of client i is 0.8772935779816514
 [92mINFO [0m:      
 INFO:flwr:
 [92mINFO [0m:      [SUMMARY]
 INFO:flwr:[SUMMARY]
-[92mINFO [0m:      Run finished 3 round(s) in 73.30s
-INFO:flwr:Run finished 3 round(s) in 73.30s
+[92mINFO [0m:      Run finished 3 round(s) in 72.86s
+INFO:flwr:Run finished 3 round(s) in 72.86s
 [92mINFO [0m:      	History (loss, distributed):
 INFO:flwr:	History (loss, distributed):
-[92mINFO [0m:      		round 1: 0.010633070953190327
-INFO:flwr:		round 1: 0.010633070953190327
-[92mINFO [0m:      		round 2: 0.00947880744934082
-INFO:flwr:		round 2: 0.00947880744934082
-[92mINFO [0m:      		round 3: 0.009098376147449017
-INFO:flwr:		round 3: 0.009098376147449017
+[92mINFO [0m:      		round 1: 0.010473871603608131
+INFO:flwr:		round 1: 0.010473871603608131
+[92mINFO [0m:      		round 2: 0.009213433600962162
+INFO:flwr:		round 2: 0.009213433600962162
+[92mINFO [0m:      		round 3: 0.008938702754676342
+INFO:flwr:		round 3: 0.008938702754676342
 [92mINFO [0m:      	History (metrics, distributed, evaluate):
 INFO:flwr:	History (metrics, distributed, evaluate):
-[92mINFO [0m:      	{'accuracy': [(1, 0.8486238532110092),
-INFO:flwr:	{'accuracy': [(1, 0.8486238532110092),
-[92mINFO [0m:      	              (2, 0.8669724770642203),
-INFO:flwr:	              (2, 0.8669724770642203),
-[92mINFO [0m:      	              (3, 0.8784403669724771)]}
-INFO:flwr:	              (3, 0.8784403669724771)]}
+[92mINFO [0m:      	{'accuracy': [(1, 0.8474770642201835),
+INFO:flwr:	{'accuracy': [(1, 0.8474770642201835),
+[92mINFO [0m:      	              (2, 0.8692660550458715),
+INFO:flwr:	              (2, 0.8692660550458715),
+[92mINFO [0m:      	              (3, 0.8772935779816514)]}
+INFO:flwr:	              (3, 0.8772935779816514)]}
 [92mINFO [0m:      
 INFO:flwr:
-INFO:root:Saved run to results/2024-07-17_21-24-53.json
+INFO:root:Saved run to results/2024-07-17_22-14-55.json

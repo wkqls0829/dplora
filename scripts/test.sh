@@ -7,7 +7,7 @@ num_rounds=3
 client_epochs=1
 model=distilbert-base-uncased
 mode=dplora
-projection_type="base"
+projection_type="diff"
 
 tid=00000
 
