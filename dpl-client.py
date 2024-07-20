@@ -3,8 +3,14 @@ import warnings
 import flwr as fl
 import torch
 import torch.nn as nn
+import os
 
 from evaluate import load as load_metric
+
+import datasets
+from datasets import load_dataset
+from utils.prompter import Prompter
+from utils.data_utils import tokenize
 
 from peft import (
     get_peft_model,
@@ -18,8 +24,11 @@ logging.basicConfig(level=logging.INFO, handlers=[logging.StreamHandler()])
 
 import transformers
 from transformers import AutoModelForSequenceClassification, AdamW, get_scheduler
+from transformers import AutoModelForCausalLM, AutoTokenizer
 from arguments import parse_args
 from data_loader import load_data
+
+datasets.utils.logging.set_verbosity_error()
 
 transformers.logging.set_verbosity_error()
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -94,16 +103,28 @@ def test(net, testloader):
     accuracy = metric.compute()["accuracy"]
     return loss, accuracy
 
+
 def main():
     logging.info(f"Started client {RANK}")
-    net = AutoModelForSequenceClassification.from_pretrained(
-        CHECKPOINT, num_labels=2
-    ).to(DEVICE)
+    net = AutoModelForCausalLM.from_pretrained(
+        CHECKPOINT,
+        trust_remote_code=True
+
+    )
+    tokenizer = AutoTokenizer.from_pretrained(CHECKPOINT)
+    tokenizer.pad_token_id = (
+        0
+    )
+    tokenizer.padding_side = "left"
+    # net = AutoModelForSequenceClassification.from_pretrained(
+        # CHECKPOINT, num_labels=2
+    # ).to(DEVICE)
+    prompter = Prompter()
 
     peft_config = LoraConfig(
-        task_type="SEQ_CLS", 
+        task_type="CAUSAL_LM",
         inference_mode=False, 
-        target_modules=["q_lin", "v_lin"],
+        target_modules=["q_proj", "v_proj", "k_proj", "o_proj", "gate_proj", "down_proj", "up_proj"],
         r=args.lora_r, 
         lora_alpha=16, 
         lora_dropout=0.1)
@@ -112,6 +133,22 @@ def main():
     net = get_peft_model(net, peft_config)
 
     net.print_trainable_parameters()
+
+    def generate_and_tokenize_prompt(data_point):
+        full_prompt = prompter.generate_prompt(
+            data_point["instruction"],
+            data_point["input"],
+            data_point["output"],
+        )
+        tokenized_full_prompt = tokenize(tokenizer, full_prompt, cutoff_len=512, add_eos_token=True)
+        return tokenized_full_prompt
+
+    train_path = os.path.join(args.data_path, args.data_name)
+    train_data = load_dataset("json", data_files=train_path)
+    train_test_data = train_data.train_test_split(test_size=0.2)
+    train_data = train_test_data["train"].shuffle().map(generate_and_tokenize_prompt)
+    test_data = train_test_data["test"].shuffle().map(generate_and_tokenize_prompt)
+
 
 
     trainloader, testloader = load_data(args.data_path, args.data_name, RANK, NUM_SPLITS, CHECKPOINT, args.teacher_data_pct)
@@ -255,10 +292,9 @@ def main():
         def get_projection_basis(self):
             projection_basis = []
             if args.projection_type == "fixed":
-                projection_basis = [range(args.rank - 1,  args.num_clients*args.local_r ,args.client_num) for _ in range(len(peft_state_dict_keys)//2)]
-            elif args.projection_type == "halffixed":
                 fixed_half = args.local_r//2
                 projection_basis = [list(range(fixed_half)) + list(range(fixed_half + args.rank-1, fixed_half + args.num_clients*fixed_half, args.num_clients)) for _ in range(len(peft_state_dict_keys)//2)]
+                # projection_basis = [range(args.rank - 1,  args.num_clients*args.local_r ,args.client_num) for _ in range(len(peft_state_dict_keys)//2)]
             elif args.projection_type == "diff":
                 state_dict = get_peft_model_state_dict(net)
                 prev_state_dict = self.state_dict_mem
@@ -267,6 +303,8 @@ def main():
                 for k, v in state_dict.items():
                     if "lora_B" in k:
                         projection_basis.append(list(torch.topk(torch.norm(prev_state_dict[k] - v, dim=1)[:args.lora_r], args.local_r).indices.cpu()))
+
+
             else:
                 projection_basis = [range(args.local_r) for _ in range(len(peft_state_dict_keys)//2)]
 

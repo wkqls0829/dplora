@@ -7,9 +7,10 @@ num_rounds=50
 client_epochs=1
 model=distilbert-base-uncased
 mode=dplora
-projection_type="diff"
+projection_type=fixed
+devices=(1 2 6 7)
 
-tid=40002
+tid=40013
 
 nohup python -u server.py \
     --num_client $num_client --data_name $data_name --rank 0 \
@@ -17,9 +18,9 @@ nohup python -u server.py \
     --mode $mode --lora_r $lora_r \
     > outputs/${tid}.out 2>&1 &
 
-for client in 1 2 3 4
+for client in 0 1 2 3
 do
-    device=$((client + 3))
+    device=${devices[$client]}
     local_r=8
     nohup python -u lora-client.py \
         --num_client $num_client --data_name $data_name --rank $client \
