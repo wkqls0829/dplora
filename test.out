@@ -26,26 +26,21 @@ INFO:flwr:Flower ECE: gRPC server running (3 rounds), SSL is disabled
 INFO:flwr:[INIT]
 [92mINFO [0m:      Requesting initial parameters from one random client
 INFO:flwr:Requesting initial parameters from one random client
-[92mINFO [0m:      Received initial parameters from one random client
-INFO:flwr:Received initial parameters from one random client
-[92mINFO [0m:      Evaluating initial global parameters
-INFO:flwr:Evaluating initial global parameters
-[92mINFO [0m:      
-INFO:flwr:
-[92mINFO [0m:      [ROUND 1]
-INFO:flwr:[ROUND 1]
-[92mINFO [0m:      configure_fit: strategy sampled 2 clients (out of 2)
-INFO:flwr:configure_fit: strategy sampled 2 clients (out of 2)
-[92mINFO [0m:      aggregate_fit: received 2 results and 0 failures
-INFO:flwr:aggregate_fit: received 2 results and 0 failures
-[93mWARNING [0m:   No fit_metrics_aggregation_fn provided
-WARNING:flwr:No fit_metrics_aggregation_fn provided
-[92mINFO [0m:      configure_evaluate: strategy sampled 2 clients (out of 2)
-INFO:flwr:configure_evaluate: strategy sampled 2 clients (out of 2)
-[92mINFO [0m:      aggregate_evaluate: received 2 results and 0 failures
-INFO:flwr:aggregate_evaluate: received 2 results and 0 failures
-accuracy of client i is 0.845183486238532
-accuracy of client i is 0.845183486238532
+[92mINFO [0m:      Sampling failed: number of available clients (0) is less than number of requested clients (1).
+INFO:flwr:Sampling failed: number of available clients (0) is less than number of requested clients (1).
+Traceback (most recent call last):
+  File "/home/kjb/lora/dplora/server.py", line 34, in <module>
+    history = fl.server.start_server(
+  File "/home/kjb/.conda/envs/lora/lib/python3.9/site-packages/flwr/server/app.py", line 171, in start_server
+    hist = run_fl(
+  File "/home/kjb/.conda/envs/lora/lib/python3.9/site-packages/flwr/server/server.py", line 483, in run_fl
+    hist, elapsed_time = server.fit(
+  File "/home/kjb/.conda/envs/lora/lib/python3.9/site-packages/flwr/server/server.py", line 93, in fit
+    self.parameters = self._get_initial_parameters(server_round=0, timeout=timeout)
+  File "/home/kjb/.conda/envs/lora/lib/python3.9/site-packages/flwr/server/server.py", line 280, in _get_initial_parameters
+    random_client = self._client_manager.sample(1)[0]
+IndexError: list index out of range
+curacy of client i is 0.8497706422018348
 [92mINFO [0m:      
 INFO:flwr:
 [92mINFO [0m:      [ROUND 2]
@@ -58,8 +53,8 @@ INFO:flwr:aggregate_fit: received 2 results and 0 failures
 INFO:flwr:configure_evaluate: strategy sampled 2 clients (out of 2)
 [92mINFO [0m:      aggregate_evaluate: received 2 results and 0 failures
 INFO:flwr:aggregate_evaluate: received 2 results and 0 failures
-accuracy of client i is 0.8658256880733946
-accuracy of client i is 0.8658256880733946
+accuracy of client i is 0.8681192660550459
+accuracy of client i is 0.8681192660550459
 [92mINFO [0m:      
 INFO:flwr:
 [92mINFO [0m:      [ROUND 3]
@@ -72,30 +67,28 @@ INFO:flwr:aggregate_fit: received 2 results and 0 failures
 INFO:flwr:configure_evaluate: strategy sampled 2 clients (out of 2)
 [92mINFO [0m:      aggregate_evaluate: received 2 results and 0 failures
 INFO:flwr:aggregate_evaluate: received 2 results and 0 failures
-accuracy of client i is 0.8738532110091743
-accuracy of client i is 0.8738532110091743
+accuracy of client i is 0.8795871559633027
+accuracy of client i is 0.8795871559633027
 [92mINFO [0m:      
 INFO:flwr:
 [92mINFO [0m:      [SUMMARY]
 INFO:flwr:[SUMMARY]
-[92mINFO [0m:      Run finished 3 round(s) in 72.60s
-INFO:flwr:Run finished 3 round(s) in 72.60s
-[92mINFO [0m:      	History (loss, distributed):
-INFO:flwr:	History (loss, distributed):
-[92mINFO [0m:      		round 1: 0.010582489892840385
-INFO:flwr:		round 1: 0.010582489892840385
-[92mINFO [0m:      		round 2: 0.00952245481312275
-INFO:flwr:		round 2: 0.00952245481312275
-[92mINFO [0m:      		round 3: 0.008988592773675919
-INFO:flwr:		round 3: 0.008988592773675919
-[92mINFO [0m:      	History (metrics, distributed, evaluate):
-INFO:flwr:	History (metrics, distributed, evaluate):
-[92mINFO [0m:      	{'accuracy': [(1, 0.845183486238532),
-INFO:flwr:	{'accuracy': [(1, 0.845183486238532),
-[92mINFO [0m:      	              (2, 0.8658256880733946),
-INFO:flwr:	              (2, 0.8658256880733946),
-[92mINFO [0m:      	              (3, 0.8738532110091743)]}
-INFO:flwr:	              (3, 0.8738532110091743)]}
+[92mINFO [0m:      Run finished 3 rounds in 64.25s
+INFO:flwr:Run finished 3 rounds in 64.25s
+[92mINFO [0m:      History (loss, distributed):
+INFO:flwr:History (loss, distributed):
+[92mINFO [0m:      	('\tround 1: 0.010429601185023785\n'
+INFO:flwr:	('\tround 1: 0.010429601185023785\n'
+[92mINFO [0m:      	 '\tround 2: 0.009500579908490181\n'
+INFO:flwr:	 '\tround 2: 0.009500579908490181\n'
+[92mINFO [0m:      	 '\tround 3: 0.00902485754340887\n')History (metrics, distributed, evaluate):
+INFO:flwr:	 '\tround 3: 0.00902485754340887\n')History (metrics, distributed, evaluate):
+[92mINFO [0m:      	{'accuracy': [(1, 0.8497706422018348),
+INFO:flwr:	{'accuracy': [(1, 0.8497706422018348),
+[92mINFO [0m:      	              (2, 0.8681192660550459),
+INFO:flwr:	              (2, 0.8681192660550459),
+[92mINFO [0m:      	              (3, 0.8795871559633027)]}
+INFO:flwr:	              (3, 0.8795871559633027)]}
 [92mINFO [0m:      
 INFO:flwr:
-INFO:root:Saved run to results/2024-07-18_13-00-10.json
+INFO:root:Saved run to results/2024-07-20_22-39-18.json

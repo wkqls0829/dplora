@@ -54,7 +54,6 @@ def train(net, trainloader, epochs, lr):
                 module.requires_grad = False
 
 
-
     criterion = nn.NLLLoss()
 
     for i in range(epochs):
@@ -102,6 +101,50 @@ def test(net, testloader):
     loss /= len(testloader.dataset)
     accuracy = metric.compute()["accuracy"]
     return loss, accuracy
+
+def build_local_trainer(tokenizer,
+                       local_micro_batch_size,
+                       gradient_accumulation_steps,
+                       local_num_epochs,
+                       local_learning_rate,
+                       group_by_length,
+                       warmup=0,
+                       density=None,
+                       lambd=None,
+                        reg=None):
+    class reg_Trainer(transformers.Trainer):
+        def compute_loss(net, inputs, return_outputs=False):
+            outputs = model(**inputs)
+            loss = outputs["loss"] if isinstance(outputs, dict) else outputs[0]
+            regularizer = 0
+            count = 0
+            loss += lambda * regularizer
+            return (loss, outputs) if return_outputs else loss
+
+    def compute_metrics(pred):
+        labels_ids = pred.label_ids
+        pred_ids = np.argmax(pred.predictions,axis=-1)
+        pred_str = tokenizer.batch_decode(pred_ids, skip_special_tokens=True)
+        label_str = tokenizer.batch_decode(labels_ids, skip_special_tokens=True)
+        rouge = evaluate.load('./evaluate/metrics/rouge/rouge.py')
+        rouge_output = rouge.compute(predictions=pred_str, references=label_str, use_aggregator=True)
+        return {
+            'rouge1': round(rouge_output["rouge1"], 4),
+            'rouge2': round(rouge_output["rouge2"], 4),
+            'rougeL': round(rouge_output["rougeL"], 4),
+            'rougeLsum': round(rouge_output["rougeLsum"], 4),
+        }
+    
+    train_args = transformers.TrainingArguements(
+        per_device_train_batch_size=local_micro_batch_size,
+        gradient_accumulation_steps=gradient_accumulation_steps,
+        warmup_steps=warmup,
+
+    )
+
+
+
+
 
 
 def main():
@@ -153,6 +196,8 @@ def main():
 
     trainloader, testloader = load_data(args.data_path, args.data_name, RANK, NUM_SPLITS, CHECKPOINT, args.teacher_data_pct)
     peft_state_dict_keys = get_peft_model_state_dict(net).keys()
+
+
     # Flower client
     class Client(fl.client.NumPyClient):
         def get_parameters(self, config=None):
