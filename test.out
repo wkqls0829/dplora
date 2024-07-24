@@ -5,7 +5,7 @@ client_epochs:	1
 teacher_pretrain_epochs:	1
 kd_epochs:	1
 teacher_ckpt:	bert-base-uncased
-client_ckpt:	distilbert-base-uncased
+client_ckpt:	datajuicer/LLaMA-1B-dj-refine-150B
 teacher_data_pct:	33
 client_lr:	5e-05
 distill_lr:	5e-05
@@ -13,8 +13,11 @@ lda:	0.1
 gamma:	0.95
 rank:	0
 local_r:	0
+batch_size:	16
+micro_batch_size:	4
 data_path:	glue
-data_name:	sst2
+data_name:	task001
+output_dir:	./outputs
 device:	0
 mode:	dplora
 projection_type:	type of projection for pd lora
@@ -26,69 +29,21 @@ INFO:flwr:Flower ECE: gRPC server running (3 rounds), SSL is disabled
 INFO:flwr:[INIT]
 [92mINFO [0m:      Requesting initial parameters from one random client
 INFO:flwr:Requesting initial parameters from one random client
-[92mINFO [0m:      Sampling failed: number of available clients (0) is less than number of requested clients (1).
-INFO:flwr:Sampling failed: number of available clients (0) is less than number of requested clients (1).
 Traceback (most recent call last):
-  File "/home/kjb/lora/dplora/server.py", line 34, in <module>
+  File "/home/kjb/flora/server.py", line 34, in <module>
     history = fl.server.start_server(
-  File "/home/kjb/.conda/envs/lora/lib/python3.9/site-packages/flwr/server/app.py", line 171, in start_server
+  File "/home/kjb/.conda/envs/lora/lib/python3.9/site-packages/flwr/server/app.py", line 180, in start_server
     hist = run_fl(
-  File "/home/kjb/.conda/envs/lora/lib/python3.9/site-packages/flwr/server/server.py", line 483, in run_fl
+  File "/home/kjb/.conda/envs/lora/lib/python3.9/site-packages/flwr/server/server.py", line 490, in run_fl
     hist, elapsed_time = server.fit(
   File "/home/kjb/.conda/envs/lora/lib/python3.9/site-packages/flwr/server/server.py", line 93, in fit
     self.parameters = self._get_initial_parameters(server_round=0, timeout=timeout)
-  File "/home/kjb/.conda/envs/lora/lib/python3.9/site-packages/flwr/server/server.py", line 280, in _get_initial_parameters
-    random_client = self._client_manager.sample(1)[0]
-IndexError: list index out of range
-curacy of client i is 0.8497706422018348
-[92mINFO [0m:      
-INFO:flwr:
-[92mINFO [0m:      [ROUND 2]
-INFO:flwr:[ROUND 2]
-[92mINFO [0m:      configure_fit: strategy sampled 2 clients (out of 2)
-INFO:flwr:configure_fit: strategy sampled 2 clients (out of 2)
-[92mINFO [0m:      aggregate_fit: received 2 results and 0 failures
-INFO:flwr:aggregate_fit: received 2 results and 0 failures
-[92mINFO [0m:      configure_evaluate: strategy sampled 2 clients (out of 2)
-INFO:flwr:configure_evaluate: strategy sampled 2 clients (out of 2)
-[92mINFO [0m:      aggregate_evaluate: received 2 results and 0 failures
-INFO:flwr:aggregate_evaluate: received 2 results and 0 failures
-accuracy of client i is 0.8681192660550459
-accuracy of client i is 0.8681192660550459
-[92mINFO [0m:      
-INFO:flwr:
-[92mINFO [0m:      [ROUND 3]
-INFO:flwr:[ROUND 3]
-[92mINFO [0m:      configure_fit: strategy sampled 2 clients (out of 2)
-INFO:flwr:configure_fit: strategy sampled 2 clients (out of 2)
-[92mINFO [0m:      aggregate_fit: received 2 results and 0 failures
-INFO:flwr:aggregate_fit: received 2 results and 0 failures
-[92mINFO [0m:      configure_evaluate: strategy sampled 2 clients (out of 2)
-INFO:flwr:configure_evaluate: strategy sampled 2 clients (out of 2)
-[92mINFO [0m:      aggregate_evaluate: received 2 results and 0 failures
-INFO:flwr:aggregate_evaluate: received 2 results and 0 failures
-accuracy of client i is 0.8795871559633027
-accuracy of client i is 0.8795871559633027
-[92mINFO [0m:      
-INFO:flwr:
-[92mINFO [0m:      [SUMMARY]
-INFO:flwr:[SUMMARY]
-[92mINFO [0m:      Run finished 3 rounds in 64.25s
-INFO:flwr:Run finished 3 rounds in 64.25s
-[92mINFO [0m:      History (loss, distributed):
-INFO:flwr:History (loss, distributed):
-[92mINFO [0m:      	('\tround 1: 0.010429601185023785\n'
-INFO:flwr:	('\tround 1: 0.010429601185023785\n'
-[92mINFO [0m:      	 '\tround 2: 0.009500579908490181\n'
-INFO:flwr:	 '\tround 2: 0.009500579908490181\n'
-[92mINFO [0m:      	 '\tround 3: 0.00902485754340887\n')History (metrics, distributed, evaluate):
-INFO:flwr:	 '\tround 3: 0.00902485754340887\n')History (metrics, distributed, evaluate):
-[92mINFO [0m:      	{'accuracy': [(1, 0.8497706422018348),
-INFO:flwr:	{'accuracy': [(1, 0.8497706422018348),
-[92mINFO [0m:      	              (2, 0.8681192660550459),
-INFO:flwr:	              (2, 0.8681192660550459),
-[92mINFO [0m:      	              (3, 0.8795871559633027)]}
-INFO:flwr:	              (3, 0.8795871559633027)]}
-[92mINFO [0m:      
-INFO:flwr:
-INFO:root:Saved run to results/2024-07-20_22-39-18.json
+  File "/home/kjb/.conda/envs/lora/lib/python3.9/site-packages/flwr/server/server.py", line 282, in _get_initial_parameters
+    get_parameters_res = random_client.get_parameters(
+  File "/home/kjb/.conda/envs/lora/lib/python3.9/site-packages/flwr/server/superlink/fleet/grpc_bidi/grpc_client_proxy.py", line 73, in get_parameters
+    res_wrapper: ResWrapper = self.bridge.request(
+  File "/home/kjb/.conda/envs/lora/lib/python3.9/site-packages/flwr/server/superlink/fleet/grpc_bidi/grpc_bridge.py", line 146, in request
+    self._raise_if_closed()
+  File "/home/kjb/.conda/envs/lora/lib/python3.9/site-packages/flwr/server/superlink/fleet/grpc_bidi/grpc_bridge.py", line 81, in _raise_if_closed
+    raise GrpcBridgeClosed()
+flwr.server.superlink.fleet.grpc_bidi.grpc_bridge.GrpcBridgeClosed

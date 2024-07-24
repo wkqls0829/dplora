@@ -4,6 +4,7 @@ import flwr as fl
 import torch
 import torch.nn as nn
 import os
+import numpy as np
 
 from evaluate import load as load_metric
 
@@ -102,23 +103,26 @@ def test(net, testloader):
     accuracy = metric.compute()["accuracy"]
     return loss, accuracy
 
-def build_local_trainer(tokenizer,
-                       local_micro_batch_size,
-                       gradient_accumulation_steps,
-                       local_num_epochs,
-                       local_learning_rate,
-                       group_by_length,
-                       warmup=0,
-                       density=None,
-                       lambd=None,
+def build_local_trainer(net,
+                        local_train_dataset,
+                        optim,
+                        tokenizer,
+                        local_micro_batch_size,
+                        gradient_accumulation_steps,
+                        local_num_epochs,
+                        local_learning_rate,
+                        group_by_length,
+                        warmup=0,
+                        density=None,
+                        lambd=None,
                         reg=None):
     class reg_Trainer(transformers.Trainer):
         def compute_loss(net, inputs, return_outputs=False):
-            outputs = model(**inputs)
+            outputs = net(**inputs)
             loss = outputs["loss"] if isinstance(outputs, dict) else outputs[0]
             regularizer = 0
             count = 0
-            loss += lambda * regularizer
+            loss += lambd * regularizer
             return (loss, outputs) if return_outputs else loss
 
     def compute_metrics(pred):
@@ -135,24 +139,89 @@ def build_local_trainer(tokenizer,
             'rougeLsum': round(rouge_output["rougeLsum"], 4),
         }
     
-    train_args = transformers.TrainingArguements(
+    train_args = transformers.TrainingArguments(
         per_device_train_batch_size=local_micro_batch_size,
         gradient_accumulation_steps=gradient_accumulation_steps,
         warmup_steps=warmup,
-
+        num_train_epochs=local_num_epochs,
+        learning_rate=local_learning_rate,
+        do_train=True,
+        do_eval=True,
+        logging_steps=1,
+        optim=optim,
+        evaluation_strategy="epoch",
+        save_strategy="no",
+        output_dir=args.output_dir,
+        ddp_find_unused_parameters=False,
+        group_by_length=False,
+        dataloader_drop_last=False,
     )
+    local_trainer = transformers.Trainer(model=net,
+                                         train_dataset=local_train_dataset,
+                                         args=train_args,
+                                         data_collator=transformers.DataCollatorForSeq2Seq(
+                                             tokenizer, pad_to_multiple_of=8, return_tensors="pt", padding=True
+                                         ),
+                                         compute_metrics=compute_metrics,
+                                        )
+    return local_trainer
 
 
+    def test(net, tokenizer, test_data, epoch, local_micro_batch_size):
+        test_args = transformers.TrainingArguments(
+            output_dir=args.output_dir,
+            do_train=False,
+            do_eval=True,
+            # fp16=True,
+            per_device_eval_batch_size=local_micro_batch_size,
+            dataloader_drop_last=False,
+            eval_accumulation_steps=4,
+        )
 
+        def compute_metrics(pred):
+            labels_ids = pred.label_ids
+            labels_ids[labels_ids == -100] = 1829
+            # pred_ids = pred.predictions
+            pred_ids = np.argmax(pred.predictions, axis=-1)
+            # all unnecessary tokens are removed
+            pred_str = tokenizer.batch_decode(pred_ids, skip_special_tokens=True)
+            label_str = tokenizer.batch_decode(labels_ids, skip_special_tokens=True)
+            rouge = evaluate.load('./evaluate/metrics/rouge/rouge.py')
+            rouge_output = rouge.compute(predictions=pred_str, references=label_str, use_aggregator=True)
+            return {
+                'rouge1': round(rouge_output["rouge1"], 4),
+                'rouge2': round(rouge_output["rouge2"], 4),
+                'rougeL': round(rouge_output["rougeL"], 4),
+                'rougeLsum': round(rouge_output["rougeLsum"], 4)
+            }
+
+        # init trainer
+        tester = transformers.Trainer(
+            model=net,
+            args=test_args,
+            data_collator=transformers.DataCollatorForSeq2Seq(
+                tokenizer, pad_to_multiple_of=8, return_tensors="pt", padding=True
+            ),
+            compute_metrics=compute_metrics
+        )
+        # test_dataset = self.test_data["train"].shuffle().map(self.generate_and_tokenize_prompt)
+        # test_dataset = self.local_test_dataset
+        eval_dataset = test_data
+        # test_results = tester.evaluate(test_dataset)
+        eval_results = tester.evaluate(eval_dataset)
+        # logging.info('For client ' + str( self.client_id) + ', the test result is:')
+        # logging.info(test_results)
+        print('For client ' + str(self.client_id) + ', the eval result is:')
+        print(eval_results)
+        return eval_results
 
 
 
 def main():
     logging.info(f"Started client {RANK}")
     net = AutoModelForCausalLM.from_pretrained(
-        CHECKPOINT,
+        args.client_ckpt,
         trust_remote_code=True
-
     )
     tokenizer = AutoTokenizer.from_pretrained(CHECKPOINT)
     tokenizer.pad_token_id = (
@@ -185,16 +254,38 @@ def main():
         )
         tokenized_full_prompt = tokenize(tokenizer, full_prompt, cutoff_len=512, add_eos_token=True)
         return tokenized_full_prompt
+    data_names = os.listdir(args.data_path)
+    for dn in data_names:
+        if args.data_name in dn:
+            data_name = dn
 
-    train_path = os.path.join(args.data_path, args.data_name)
+    print(f"loading data{data_name}")
+
+    train_path = os.path.join(args.data_path, data_name)
     train_data = load_dataset("json", data_files=train_path)
-    train_test_data = train_data.train_test_split(test_size=0.2)
+    # loaded_data = load_dataset("json", data_files=train_path, field=["Categories", "Definition", "Input_language", "Output_language", "Positive Examples"])
+    # print(f'loading data from {loaded_data["Categories"]} with language {loaded_data["Input_language"]} to {loaded_data["Output_language"]}')
+    # train_data = loaded_data["Positive Examples"]
+    # train_data["instruction"] = loaded_data["Definition"] 
+    train_test_data = train_data["train"].train_test_split(test_size=0.2)
     train_data = train_test_data["train"].shuffle().map(generate_and_tokenize_prompt)
     test_data = train_test_data["test"].shuffle().map(generate_and_tokenize_prompt)
 
+    optimizer = AdamW(net.parameters(), lr=args.client_lr, no_deprecation_warning=True)
 
+    local_trainer=build_local_trainer(net=net,
+                                      local_train_dataset=train_data,
+                                      optim="adamw_torch",
+                                      tokenizer=tokenizer,
+                                      local_micro_batch_size=args.micro_batch_size,
+                                      gradient_accumulation_steps=args.batch_size//args.micro_batch_size,
+                                      local_num_epochs=args.client_epochs,
+                                      local_learning_rate=args.client_lr,
+                                      group_by_length=False,
+                                      warmup=0,
+                                     )
 
-    trainloader, testloader = load_data(args.data_path, args.data_name, RANK, NUM_SPLITS, CHECKPOINT, args.teacher_data_pct)
+    # trainloader, testloader = load_data(args.data_path, args.data_name, RANK, NUM_SPLITS, CHECKPOINT, args.teacher_data_pct)
     peft_state_dict_keys = get_peft_model_state_dict(net).keys()
 
 
@@ -340,7 +431,7 @@ def main():
                 fixed_half = args.local_r//2
                 projection_basis = [list(range(fixed_half)) + list(range(fixed_half + args.rank-1, fixed_half + args.num_clients*fixed_half, args.num_clients)) for _ in range(len(peft_state_dict_keys)//2)]
                 # projection_basis = [range(args.rank - 1,  args.num_clients*args.local_r ,args.client_num) for _ in range(len(peft_state_dict_keys)//2)]
-            elif args.projection_type == "diff":
+            elif args.projection_type == "gradient":
                 state_dict = get_peft_model_state_dict(net)
                 prev_state_dict = self.state_dict_mem
                 if not prev_state_dict:
@@ -382,9 +473,24 @@ def main():
 
         def fit(self, parameters, config):
             self.set_parameters(parameters)
+            local_trainer=build_local_trainer(net=net,
+                                              local_train_dataset=train_data,
+                                              optim=optimizer,
+                                              tokenizer=tokenizer,
+                                              local_micro_batch_size=args.micro_batch_size,
+                                              gradient_accumulation_steps=args.batch_size//args.micro_batch_size,
+                                              local_num_epochs=args.client_epochs,
+                                              local_learning_rate=args.client_lr,
+                                              group_by_length=False,
+                                              warmup=0,
+                                             )
             logging.info(f"Client {RANK} Training Started...")
-            train(net, trainloader, epochs=args.client_epochs, lr=args.client_lr)
-            return self.get_parameters(), len(trainloader), {}
+            result = local_trainer.train()
+            print(f"trained on {len(train_data)} number of dataset")
+            print(local_trainer.state.log_history[-2])
+            print(local_trainer.state.log_history[-1])
+            print(result.metrics)
+            return self.get_parameters(), len(train_data), {}
 
         def evaluate(self, parameters, config):
             self.set_parameters(parameters)

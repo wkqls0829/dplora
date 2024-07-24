@@ -20,8 +20,11 @@ class Args:
     gamma: float
     rank: int
     local_r: int
+    batch_size: int
+    micro_batch_size: int
     data_path: str
     data_name: str
+    output_dir: str
     device: int
     mode: str
     projection_type: str
@@ -50,9 +53,12 @@ def parse_args() -> Args:
 
     parser.add_argument('--rank', type=int, default=0)
     parser.add_argument('--local_r', type=int, default=0)
+    parser.add_argument('--batch_size', type=int, default=16)
+    parser.add_argument('--micro_batch_size', type=int, default=4)
 
     parser.add_argument('--data_path', type=str, default="glue")
     parser.add_argument('--data_name', type=str, default="cola")
+    parser.add_argument('--output_dir', type=str, default="./outputs")
     parser.add_argument('--mode', type=str, default="lora")
     parser.add_argument('--projection_type', type=str, default="type of projection for pd lora")
 
