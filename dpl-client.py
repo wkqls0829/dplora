@@ -86,25 +86,26 @@ def HetLoRALoss(net, criterion, outputs, target):
 
 
 
-def test(net, testloader):
-    metric = load_metric("accuracy")
-    loss = 0
-    net.eval()
-    for batch in testloader:
-        
-        batch = {k: v.to(DEVICE) for k, v in batch.items()}
-        with torch.no_grad():
-            outputs = net(**batch)
-        logits = outputs.logits
-        loss += outputs.loss.item()
-        predictions = torch.argmax(logits, dim=-1)
-        metric.add_batch(predictions=predictions, references=batch["labels"])
-    loss /= len(testloader.dataset)
-    accuracy = metric.compute()["accuracy"]
-    return loss, accuracy
+#def test(net, testloader):
+#    metric = load_metric("accuracy")
+#    loss = 0
+#    net.eval()
+#    for batch in testloader:
+#        
+#        batch = {k: v.to(DEVICE) for k, v in batch.items()}
+#        with torch.no_grad():
+#            outputs = net(**batch)
+#        logits = outputs.logits
+#        loss += outputs.loss.item()
+#        predictions = torch.argmax(logits, dim=-1)
+#        metric.add_batch(predictions=predictions, references=batch["labels"])
+#    loss /= len(testloader.dataset)
+#    accuracy = metric.compute()["accuracy"]
+#    return loss, accuracy
 
 def build_local_trainer(net,
                         local_train_dataset,
+                        local_eval_dataset,
                         optim,
                         tokenizer,
                         local_micro_batch_size,
@@ -158,6 +159,7 @@ def build_local_trainer(net,
     )
     local_trainer = transformers.Trainer(model=net,
                                          train_dataset=local_train_dataset,
+                                         eval_dataset=local_eval_dataset,
                                          args=train_args,
                                          data_collator=transformers.DataCollatorForSeq2Seq(
                                              tokenizer, pad_to_multiple_of=8, return_tensors="pt", padding=True
@@ -167,53 +169,53 @@ def build_local_trainer(net,
     return local_trainer
 
 
-    def test(net, tokenizer, test_data, epoch, local_micro_batch_size):
-        test_args = transformers.TrainingArguments(
-            output_dir=args.output_dir,
-            do_train=False,
-            do_eval=True,
-            # fp16=True,
-            per_device_eval_batch_size=local_micro_batch_size,
-            dataloader_drop_last=False,
-            eval_accumulation_steps=4,
-        )
+def test(net, tokenizer, test_data, epoch, local_micro_batch_size):
+    test_args = transformers.TrainingArguments(
+        output_dir=args.output_dir,
+        do_train=False,
+        do_eval=True,
+        # fp16=True,
+        per_device_eval_batch_size=local_micro_batch_size,
+        dataloader_drop_last=False,
+        eval_accumulation_steps=4,
+    )
 
-        def compute_metrics(pred):
-            labels_ids = pred.label_ids
-            labels_ids[labels_ids == -100] = 1829
-            # pred_ids = pred.predictions
-            pred_ids = np.argmax(pred.predictions, axis=-1)
-            # all unnecessary tokens are removed
-            pred_str = tokenizer.batch_decode(pred_ids, skip_special_tokens=True)
-            label_str = tokenizer.batch_decode(labels_ids, skip_special_tokens=True)
-            rouge = evaluate.load('./evaluate/metrics/rouge/rouge.py')
-            rouge_output = rouge.compute(predictions=pred_str, references=label_str, use_aggregator=True)
-            return {
-                'rouge1': round(rouge_output["rouge1"], 4),
-                'rouge2': round(rouge_output["rouge2"], 4),
-                'rougeL': round(rouge_output["rougeL"], 4),
-                'rougeLsum': round(rouge_output["rougeLsum"], 4)
-            }
+    def compute_metrics(pred):
+        labels_ids = pred.label_ids
+        labels_ids[labels_ids == -100] = 1829
+        # pred_ids = pred.predictions
+        pred_ids = np.argmax(pred.predictions, axis=-1)
+        # all unnecessary tokens are removed
+        pred_str = tokenizer.batch_decode(pred_ids, skip_special_tokens=True)
+        label_str = tokenizer.batch_decode(labels_ids, skip_special_tokens=True)
+        rouge = evaluate.load('./evaluate/metrics/rouge/rouge.py')
+        rouge_output = rouge.compute(predictions=pred_str, references=label_str, use_aggregator=True)
+        return {
+            'rouge1': round(rouge_output["rouge1"], 4),
+            'rouge2': round(rouge_output["rouge2"], 4),
+            'rougeL': round(rouge_output["rougeL"], 4),
+            'rougeLsum': round(rouge_output["rougeLsum"], 4)
+        }
 
-        # init trainer
-        tester = transformers.Trainer(
-            model=net,
-            args=test_args,
-            data_collator=transformers.DataCollatorForSeq2Seq(
-                tokenizer, pad_to_multiple_of=8, return_tensors="pt", padding=True
-            ),
-            compute_metrics=compute_metrics
-        )
-        # test_dataset = self.test_data["train"].shuffle().map(self.generate_and_tokenize_prompt)
-        # test_dataset = self.local_test_dataset
-        eval_dataset = test_data
-        # test_results = tester.evaluate(test_dataset)
-        eval_results = tester.evaluate(eval_dataset)
-        # logging.info('For client ' + str( self.client_id) + ', the test result is:')
-        # logging.info(test_results)
-        print('For client ' + str(self.client_id) + ', the eval result is:')
-        print(eval_results)
-        return eval_results
+    # init trainer
+    tester = transformers.Trainer(
+        model=net,
+        args=test_args,
+        data_collator=transformers.DataCollatorForSeq2Seq(
+            tokenizer, pad_to_multiple_of=8, return_tensors="pt", padding=True
+        ),
+        compute_metrics=compute_metrics
+    )
+    # test_dataset = self.test_data["train"].shuffle().map(self.generate_and_tokenize_prompt)
+    # test_dataset = self.local_test_dataset
+    eval_dataset = test_data
+    # test_results = tester.evaluate(test_dataset)
+    eval_results = tester.evaluate(eval_dataset)
+    # logging.info('For client ' + str( self.client_id) + ', the test result is:')
+    # logging.info(test_results)
+    print('For client ' + str(self.client_id) + ', the eval result is:')
+    print(eval_results)
+    return eval_results
 
 
 
@@ -232,11 +234,13 @@ def main():
         # CHECKPOINT, num_labels=2
     # ).to(DEVICE)
     prompter = Prompter()
+    
 
     peft_config = LoraConfig(
         task_type="CAUSAL_LM",
         inference_mode=False, 
-        target_modules=["q_proj", "v_proj", "k_proj", "o_proj", "gate_proj", "down_proj", "up_proj"],
+        target_modules=["query", "key", "value"],
+        # target_modules=["q_proj", "v_proj", "k_proj", "o_proj", "gate_proj", "down_proj", "up_proj"],
         r=args.lora_r, 
         lora_alpha=16, 
         lora_dropout=0.1)
@@ -256,25 +260,38 @@ def main():
         return tokenized_full_prompt
     data_names = os.listdir(args.data_path)
     for dn in data_names:
-        if args.data_name in dn:
-            data_name = dn
+        if "training_" + args.data_name + ".json" in dn:
+            train_data_name = dn
+        if "eval_" + args.data_name + ".json" in dn:
+            eval_data_name = dn
+        if "test_" + args.data_name + ".json" in dn:
+            test_data_name = dn
 
-    print(f"loading data{data_name}")
+    print(f"loading data{train_data_name}")
 
-    train_path = os.path.join(args.data_path, data_name)
+    train_path = os.path.join(args.data_path, train_data_name)
+    eval_path = os.path.join(args.data_path, eval_data_name)
+    test_path = os.path.join(args.data_path, test_data_name)
     train_data = load_dataset("json", data_files=train_path)
+    eval_data = load_dataset("json", data_files=eval_path)
+    test_data = load_dataset("json", data_files=test_path)
     # loaded_data = load_dataset("json", data_files=train_path, field=["Categories", "Definition", "Input_language", "Output_language", "Positive Examples"])
     # print(f'loading data from {loaded_data["Categories"]} with language {loaded_data["Input_language"]} to {loaded_data["Output_language"]}')
     # train_data = loaded_data["Positive Examples"]
     # train_data["instruction"] = loaded_data["Definition"] 
-    train_test_data = train_data["train"].train_test_split(test_size=0.2)
-    train_data = train_test_data["train"].shuffle().map(generate_and_tokenize_prompt)
-    test_data = train_test_data["test"].shuffle().map(generate_and_tokenize_prompt)
+    # train_eval_data = train_data["train"].train_test_split(test_size=0.2)
+    train_data = train_data["train"].shuffle().map(generate_and_tokenize_prompt)
+    eval_data = eval_data["train"].shuffle().map(generate_and_tokenize_prompt)
+    test_data = test_data["train"].shuffle().map(generate_and_tokenize_prompt)
 
-    optimizer = AdamW(net.parameters(), lr=args.client_lr, no_deprecation_warning=True)
+
+    print("train data is")
+    print(train_data)
+    print(len(train_data))
 
     local_trainer=build_local_trainer(net=net,
                                       local_train_dataset=train_data,
+                                      local_eval_dataset=eval_data,
                                       optim="adamw_torch",
                                       tokenizer=tokenizer,
                                       local_micro_batch_size=args.micro_batch_size,
@@ -287,6 +304,8 @@ def main():
 
     # trainloader, testloader = load_data(args.data_path, args.data_name, RANK, NUM_SPLITS, CHECKPOINT, args.teacher_data_pct)
     peft_state_dict_keys = get_peft_model_state_dict(net).keys()
+    non_lora_keys = [k for k in peft_state_dict_keys if "lora" not in k]
+    lora_keys = [k for k in peft_state_dict_keys if "lora" in k]
 
 
     # Flower client
@@ -420,8 +439,13 @@ def main():
                     dw = torch.mm(v[:, projection_basis[i]], param_A).cpu().numpy()
                     delta_w.append(dw)
                     i += 1
+
         
-            parameters = [val.cpu().numpy() for _, val in state_dict.items()] + delta_w
+            parameters = delta_w
+            old_parameters = [val.cpu().numpy() for _, val in state_dict.items()]
+            print(parameters[0].shape)
+            print("what's the difference")
+            print(old_parameters[0].shape)
 
             return parameters
 
@@ -450,23 +474,22 @@ def main():
 
 
         def set_parameters(self, parameters):
-            params_dict = zip(peft_state_dict_keys, parameters[:len(peft_state_dict_keys)])
-            delta_w = parameters[len(peft_state_dict_keys):]
-            new_params = []
+            delta_w = parameters[len(non_lora_keys):]
+            new_lora_params = []
 
             for dw in delta_w:
                 u, s, v = torch.svd(torch.Tensor(dw).to(device))
                 s = torch.diag(s)
                 B = torch.mm(u[:, :args.lora_r], s[:args.lora_r,:args.lora_r])
                 A = v[:args.lora_r, :]
-                new_params.append(A)
-                new_params.append(B)
+                new_lora_params.append(A)
+                new_lora_params.append(B)
 
-            for i, (k, v) in enumerate(params_dict):
-                if "lora" in k:
-                    v = new_params[i]
-            params_dict = zip(peft_state_dict_keys, parameters[:len(peft_state_dict_keys)])
-            state_dict = {k: torch.tensor(v).to(device) for k, v in params_dict}
+            non_lora_params = zip(non_lora_keys, parameters[:len(peft_state_dict_keys)])
+
+            state_dict = {}
+            for k, p in zip(lora_keys, new_lora_params):
+                state_dict[k] = p
             self.state_dict_mem = state_dict
 
             set_peft_model_state_dict(net, state_dict)
@@ -475,7 +498,8 @@ def main():
             self.set_parameters(parameters)
             local_trainer=build_local_trainer(net=net,
                                               local_train_dataset=train_data,
-                                              optim=optimizer,
+                                              local_eval_dataset=eval_data,
+                                              optim="adamw_torch",
                                               tokenizer=tokenizer,
                                               local_micro_batch_size=args.micro_batch_size,
                                               gradient_accumulation_steps=args.batch_size//args.micro_batch_size,
@@ -494,8 +518,8 @@ def main():
 
         def evaluate(self, parameters, config):
             self.set_parameters(parameters)
-            loss, accuracy = test(net, testloader)
-            return float(loss), len(testloader), {"accuracy": float(accuracy)}
+            eval_results = test(net, tokenizer, test_data, 1, args.micro_batch_size)
+            return float(loss), len(test_data), {"accuracy": float(accuracy)}
     # Start client
     if args.mode == "hetlora":
         print("starting hetlora")

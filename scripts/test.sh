@@ -2,12 +2,13 @@
 
 num_client=2
 data_path=~/FederatedScope/data/1613/
-data_names=(eval_1 eval_2 eval_3 eval_4)
+data_names=(1 2 3 4)
 data_name=task001
 lora_r=64
 num_rounds=3
 client_epochs=1
-model=datajuicer/LLaMA-1B-dj-refine-150B
+model=google-bert/bert-base-cased
+# model=datajuicer/LLaMA-1B-dj-refine-150B
 mode=dplora
 projection_type=gradient
 
@@ -21,7 +22,7 @@ nohup python -u server.py \
 
 for client in 0 1
 do
-    device=$((client+6))
+    device=$((client+0))
     data_name=${data_names[$client]}
     local_r=4
     nohup python -u dpl-client.py \

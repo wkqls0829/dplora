@@ -10,7 +10,7 @@ mode=dplora
 projection_type=fixed
 devices=(1 2 6 7)
 
-tid=40013
+tid=49013
 
 nohup python -u server.py \
     --num_client $num_client --data_name $data_name --rank 0 \
