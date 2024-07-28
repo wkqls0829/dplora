@@ -5,23 +5,22 @@ import torch
 import peft
 from tqdm import tqdm
 
-
-
 def tokenize(tokenizer, prompt, cutoff_len=512, add_eos_token=True):
     result = tokenizer(
         prompt,
         truncation=True,
         max_length=cutoff_len,
-        padding=False,
+        padding=True,
         return_tensors=None,
     )
     if (
-            result["input_ids"][-1] != tokenizer.eos_token_id
+            result["input_ids"][-1] != tokenizer.cls_token_id
             and len(result["input_ids"]) < cutoff_len
             and add_eos_token
     ):
-        result["input_ids"].append(tokenizer.eos_token_id)
+        result["input_ids"].append(tokenizer.cls_token_id)
         result["attention_mask"].append(1)
+        result["token_type_ids"].append(0)
 
     result["labels"] = result["input_ids"].copy()
 

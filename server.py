@@ -11,14 +11,32 @@ NUM_CLIENTS = args.num_clients
 NUM_SPLITS = NUM_CLIENTS + 1
 
 def weighted_average(metrics):
-    # Multiply accuracy of each client by number of examples used
-    accuracies = [num_examples * m["accuracy"] for num_examples, m in metrics]
+    eval_rouge1 = [num_examples * m["eval_rouge1"] for num_examples, m in metrics]
+    eval_rouge2 = [num_examples * m["eval_rouge2"] for num_examples, m in metrics]
+    eval_rougeL = [num_examples * m["eval_rougeL"] for num_examples, m in metrics]
+    eval_rougeLsum = [num_examples * m["eval_rougeLsum"] for num_examples, m in metrics]
     examples = [num_examples for num_examples, _ in metrics]
-    for i in range(len(accuracies)):
-        print(f"accuracy of client i is {accuracies[i] / examples[i]}")
+    for i in range(len(eval_rouge1)):
+        print(f"eval_rouge1 of client {i} is {eval_rouge1[i] / examples[i]}")
+        print(f"eval_rouge2 of client {i} is {eval_rouge2[i] / examples[i]}")
+        print(f"eval_rougeL of client {i} is {eval_rougeL[i] / examples[i]}")
+        print(f"eval_rougeLsum of client {i} is {eval_rougeLsum[i] / examples[i]}")
 
     # Aggregate and return custom metric (weighted average)
-    return {"accuracy": sum(accuracies) / sum(examples)}
+    return {"eval_rouge1": sum(eval_rouge1) / sum(examples),
+            "eval_rouge2": sum(eval_rouge2) / sum(examples),
+            "eval_rougeL": sum(eval_rougeL) / sum(examples),
+            "eval_rougeLsum": sum(eval_rougeLsum) / sum(examples)}
+
+# def weighted_average(metrics):
+#     # Multiply accuracy of each client by number of examples used
+#     accuracies = [num_examples * m["accuracy"] for num_examples, m in metrics]
+#     examples = [num_examples for num_examples, _ in metrics]
+#     for i in range(len(accuracies)):
+#         print(f"accuracy of client i is {accuracies[i] / examples[i]}")
+
+#     # Aggregate and return custom metric (weighted average)
+#     return {"accuracy": sum(accuracies) / sum(examples)}
 
 if __name__ == "__main__":
     # Define strategy

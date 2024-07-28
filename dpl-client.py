@@ -1,3 +1,6 @@
+import os
+os.environ["HF_HOME"] = "../hfcache"
+
 import warnings
 
 import flwr as fl
@@ -6,6 +9,7 @@ import torch.nn as nn
 import os
 import numpy as np
 
+import evaluate
 from evaluate import load as load_metric
 
 import datasets
@@ -126,9 +130,25 @@ def build_local_trainer(net,
             loss += lambd * regularizer
             return (loss, outputs) if return_outputs else loss
 
+    # def compute_metrics(pred):
+    #     labels_ids = pred.label_ids
+    #     pred_ids = np.argmax(pred.predictions,axis=-1)
+    #     pred_str = tokenizer.batch_decode(pred_ids, skip_special_tokens=True)
+    #     label_str = tokenizer.batch_decode(labels_ids, skip_special_tokens=True)
+    #     rouge = evaluate.load('./evaluate/metrics/rouge/rouge.py')
+    #     rouge_output = rouge.compute(predictions=pred_str, references=label_str, use_aggregator=True)
+    #     return {
+    #         'rouge1': round(rouge_output["rouge1"], 4),
+    #         'rouge2': round(rouge_output["rouge2"], 4),
+    #         'rougeL': round(rouge_output["rougeL"], 4),
+    #         'rougeLsum': round(rouge_output["rougeLsum"], 4),
+    #     }
+
     def compute_metrics(pred):
-        labels_ids = pred.label_ids
-        pred_ids = np.argmax(pred.predictions,axis=-1)
+        pred_ids, labels_ids = pred
+        labels_ids = np.where(labels_ids != -100, labels_ids, tokenizer.pad_token_id)
+        pred_ids = np.where(pred_ids != -100, pred_ids, tokenizer.pad_token_id)
+        pred_ids = np.argmax(pred_ids, axis=-1)
         pred_str = tokenizer.batch_decode(pred_ids, skip_special_tokens=True)
         label_str = tokenizer.batch_decode(labels_ids, skip_special_tokens=True)
         rouge = evaluate.load('./evaluate/metrics/rouge/rouge.py')
@@ -181,11 +201,10 @@ def test(net, tokenizer, test_data, epoch, local_micro_batch_size):
     )
 
     def compute_metrics(pred):
-        labels_ids = pred.label_ids
-        labels_ids[labels_ids == -100] = 1829
-        # pred_ids = pred.predictions
-        pred_ids = np.argmax(pred.predictions, axis=-1)
-        # all unnecessary tokens are removed
+        pred_ids, labels_ids = pred
+        labels_ids = np.where(labels_ids != -100, labels_ids, tokenizer.pad_token_id)
+        pred_ids = np.where(pred_ids != -100, pred_ids, tokenizer.pad_token_id)
+        pred_ids = np.argmax(pred_ids, axis=-1)
         pred_str = tokenizer.batch_decode(pred_ids, skip_special_tokens=True)
         label_str = tokenizer.batch_decode(labels_ids, skip_special_tokens=True)
         rouge = evaluate.load('./evaluate/metrics/rouge/rouge.py')
@@ -194,8 +213,25 @@ def test(net, tokenizer, test_data, epoch, local_micro_batch_size):
             'rouge1': round(rouge_output["rouge1"], 4),
             'rouge2': round(rouge_output["rouge2"], 4),
             'rougeL': round(rouge_output["rougeL"], 4),
-            'rougeLsum': round(rouge_output["rougeLsum"], 4)
+            'rougeLsum': round(rouge_output["rougeLsum"], 4),
         }
+
+    # def compute_metrics(pred):
+    #     labels_ids = pred.label_ids
+    #     labels_ids[labels_ids == -100] = 1829
+    #     # pred_ids = pred.predictions
+    #     pred_ids = np.argmax(pred.predictions, axis=-1)
+    #     # all unnecessary tokens are removed
+    #     pred_str = tokenizer.batch_decode(pred_ids, skip_special_tokens=True)
+    #     label_str = tokenizer.batch_decode(labels_ids, skip_special_tokens=True)
+    #     rouge = evaluate.load('./evaluate/metrics/rouge/rouge.py')
+    #     rouge_output = rouge.compute(predictions=pred_str, references=label_str, use_aggregator=True)
+    #     return {
+    #         'rouge1': round(rouge_output["rouge1"], 4),
+    #         'rouge2': round(rouge_output["rouge2"], 4),
+    #         'rougeL': round(rouge_output["rougeL"], 4),
+    #         'rougeLsum': round(rouge_output["rougeLsum"], 4)
+    #     }
 
     # init trainer
     tester = transformers.Trainer(
@@ -213,7 +249,7 @@ def test(net, tokenizer, test_data, epoch, local_micro_batch_size):
     eval_results = tester.evaluate(eval_dataset)
     # logging.info('For client ' + str( self.client_id) + ', the test result is:')
     # logging.info(test_results)
-    print('For client ' + str(self.client_id) + ', the eval result is:')
+    print('For client ' + str(RANK) + ', the eval result is:')
     print(eval_results)
     return eval_results
 
@@ -235,6 +271,7 @@ def main():
     # ).to(DEVICE)
     prompter = Prompter()
     
+    print(tokenizer)
 
     peft_config = LoraConfig(
         task_type="CAUSAL_LM",
@@ -267,7 +304,7 @@ def main():
         if "test_" + args.data_name + ".json" in dn:
             test_data_name = dn
 
-    print(f"loading data{train_data_name}")
+    print(f"loading data {train_data_name}")
 
     train_path = os.path.join(args.data_path, train_data_name)
     eval_path = os.path.join(args.data_path, eval_data_name)
@@ -462,7 +499,7 @@ def main():
                     return [range(args.local_r) for _ in range(len(peft_state_dict_keys)//2)]
                 for k, v in state_dict.items():
                     if "lora_B" in k:
-                        projection_basis.append(list(torch.topk(torch.norm(prev_state_dict[k] - v, dim=1)[:args.lora_r], args.local_r).indices.cpu()))
+                        projection_basis.append(list(torch.topk(torch.norm(prev_state_dict[k].cpu() - v.cpu(), dim=1)[:args.lora_r], args.local_r).indices))
 
 
             else:
@@ -519,20 +556,31 @@ def main():
         def evaluate(self, parameters, config):
             self.set_parameters(parameters)
             eval_results = test(net, tokenizer, test_data, 1, args.micro_batch_size)
-            return float(loss), len(test_data), {"accuracy": float(accuracy)}
+            print(eval_results)
+            loss = eval_results["eval_loss"]
+            eval_rouge1 = eval_results["eval_rouge1"]
+            eval_rouge2 = eval_results["eval_rouge2"]
+            eval_rougeL = eval_results["eval_rougeL"]
+            eval_rougeLsum = eval_results["eval_rougeLsum"]
+            result_dict = {"eval_rouge1": float(eval_results["eval_rouge1"]),
+                           "eval_rouge2": float(eval_results["eval_rouge2"]),
+                           "eval_rougeL": float(eval_results["eval_rougeL"]),
+                           "eval_rougeLsum": float(eval_results["eval_rougeLsum"])}
+            return float(loss), len(test_data), result_dict #{"accuracy": float(accuracy)}
+
     # Start client
     if args.mode == "hetlora":
         print("starting hetlora")
-        fl.client.start_numpy_client(server_address="127.0.0.1:8090", client=HetLoRA_Client())
+        fl.client.start_client(server_address="127.0.0.1:8090", client=HetLoRA_Client().to_client())
     elif args.mode == "svdlora":
         print("starting svdlora")
-        fl.client.start_numpy_client(server_address="127.0.0.1:8090", client=SVDLoRA_Client())
+        fl.client.start_client(server_address="127.0.0.1:8090", client=SVDLoRA_Client().to_client())
     elif args.mode == "dplora":
         print("starting dplora")
-        fl.client.start_numpy_client(server_address="127.0.0.1:8090", client=DPLoRA_Client())
+        fl.client.start_client(server_address="127.0.0.1:8090", client=DPLoRA_Client().to_client())
     else:
         print("starting normal lora")
-        fl.client.start_numpy_client(server_address="127.0.0.1:8090", client=Client())
+        fl.client.start_client(server_address="127.0.0.1:8090", client=Client().to_client())
 
 
 if __name__ == "__main__":
