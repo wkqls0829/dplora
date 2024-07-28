@@ -1,6 +1,3 @@
-import os
-os.environ["HF_HOME"] = "../hfcache"
-
 import warnings
 
 import flwr as fl
