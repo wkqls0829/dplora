@@ -35,6 +35,10 @@ datasets.utils.logging.set_verbosity_error()
 transformers.logging.set_verbosity_error()
 warnings.filterwarnings("ignore", category=UserWarning)
 
+import datetime
+import wandb
+wandb.init(mode="disabled")
+
 args = parse_args()
 RANK = args.rank
 NUM_CLIENTS = args.num_clients
@@ -46,6 +50,12 @@ print(f"current device is {device}")
 
 DEVICE = torch.cuda.current_device()
 CHECKPOINT = args.client_ckpt
+
+# wandb.init(project="DPLoRA_" + args.data_name,
+#             config=vars(args),
+#             )
+# wandb.run.name = args.tid + "_" + datetime.datetime.strftime(datetime.datetime.now(), "%Y_%m_%d_%T")
+# wandb.config.update({"task_id": args.tid})
 
 def train(net, trainloader, epochs, lr):
     optimizer = AdamW(net.parameters(), lr=lr, no_deprecation_warning=True)
@@ -173,6 +183,7 @@ def build_local_trainer(net,
         ddp_find_unused_parameters=False,
         group_by_length=False,
         dataloader_drop_last=False,
+        report_to="none"
     )
     local_trainer = transformers.Trainer(model=net,
                                          train_dataset=local_train_dataset,
@@ -544,10 +555,14 @@ def main():
                                              )
             logging.info(f"Client {RANK} Training Started...")
             result = local_trainer.train()
-            print(f"trained on {len(train_data)} number of dataset")
-            print(local_trainer.state.log_history[-2])
-            print(local_trainer.state.log_history[-1])
+            # print(f"trained on {len(train_data)} number of dataset")
+            # print(local_trainer.state.log_history[-2])
+            # print(local_trainer.state.log_history[-1])
+            print("=" * 30)
+            print(local_trainer)
+            print(result)
             print(result.metrics)
+            print("=" * 30)
             return self.get_parameters(), len(train_data), {}
 
         def evaluate(self, parameters, config):
@@ -555,14 +570,12 @@ def main():
             eval_results = test(net, tokenizer, test_data, 1, args.micro_batch_size)
             print(eval_results)
             loss = eval_results["eval_loss"]
-            eval_rouge1 = eval_results["eval_rouge1"]
-            eval_rouge2 = eval_results["eval_rouge2"]
-            eval_rougeL = eval_results["eval_rougeL"]
-            eval_rougeLsum = eval_results["eval_rougeLsum"]
+
             result_dict = {"eval_rouge1": float(eval_results["eval_rouge1"]),
                            "eval_rouge2": float(eval_results["eval_rouge2"]),
                            "eval_rougeL": float(eval_results["eval_rougeL"]),
-                           "eval_rougeLsum": float(eval_results["eval_rougeLsum"])}
+                           "eval_rougeLsum": float(eval_results["eval_rougeLsum"]),
+                           "client": RANK}
             return float(loss), len(test_data), result_dict #{"accuracy": float(accuracy)}
 
     # Start client
