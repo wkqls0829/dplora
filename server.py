@@ -26,14 +26,15 @@ def weighted_average(metrics):
         for key in weighted_sums.keys():
             weighted_sums[key] += num_examples * m[key]
         client = m["client"]
+        dataset_name = str(m["dataset"]).zfill(4)
         print(f"eval_rouge1 of client {client} is {m['eval_rouge1']}")
         print(f"eval_rouge2 of client {client} is {m['eval_rouge2']}")
         print(f"eval_rougeL of client {client} is {m['eval_rougeL']}")
         print(f"eval_rougeLsum of client {client} is {m['eval_rougeLsum']}")
-        wandb.log({"Client {} Eval Rouge 1".format(client): m['eval_rouge1'],
-                   "Client {} Eval Rouge 2".format(client): m['eval_rouge2'],
-                   "Client {} Eval Rouge L".format(client): m['eval_rougeL'],
-                   "Client {} Eval Rouge Lsum".format(client): m['eval_rougeLsum']},
+        wandb.log({"Client {} / Dataset {} / Eval Rouge 1".format(client, dataset_name): m['eval_rouge1'],
+                   "Client {} / Dataset {} / Eval Rouge 2".format(client, dataset_name): m['eval_rouge2'],
+                   "Client {} / Dataset {} / Eval Rouge L".format(client, dataset_name): m['eval_rougeL'],
+                   "Client {} / Dataset {} / Eval Rouge Lsum".format(client, dataset_name): m['eval_rougeLsum']},
                    step=current_round)
     
     result = {key: weighted_sums[key] / total_examples for key in weighted_sums}

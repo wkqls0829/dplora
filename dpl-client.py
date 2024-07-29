@@ -35,9 +35,7 @@ datasets.utils.logging.set_verbosity_error()
 transformers.logging.set_verbosity_error()
 warnings.filterwarnings("ignore", category=UserWarning)
 
-import datetime
-import wandb
-wandb.init(mode="disabled")
+os.environ['WANDB_DISABLED'] = 'true'
 
 args = parse_args()
 RANK = args.rank
@@ -558,11 +556,7 @@ def main():
             # print(f"trained on {len(train_data)} number of dataset")
             # print(local_trainer.state.log_history[-2])
             # print(local_trainer.state.log_history[-1])
-            print("=" * 30)
-            print(local_trainer)
-            print(result)
-            print(result.metrics)
-            print("=" * 30)
+
             return self.get_parameters(), len(train_data), {}
 
         def evaluate(self, parameters, config):
@@ -575,7 +569,8 @@ def main():
                            "eval_rouge2": float(eval_results["eval_rouge2"]),
                            "eval_rougeL": float(eval_results["eval_rougeL"]),
                            "eval_rougeLsum": float(eval_results["eval_rougeLsum"]),
-                           "client": RANK}
+                           "client": RANK,
+                           "dataset": args.data_name}
             return float(loss), len(test_data), result_dict #{"accuracy": float(accuracy)}
 
     # Start client
