@@ -28,6 +28,7 @@ class Args:
     device: int
     mode: str
     projection_type: str
+    tid: str
 
 
 def parse_args() -> Args:
@@ -61,6 +62,8 @@ def parse_args() -> Args:
     parser.add_argument('--output_dir', type=str, default="./outputs")
     parser.add_argument('--mode', type=str, default="lora")
     parser.add_argument('--projection_type', type=str, default="type of projection for pd lora")
+
+    parser.add_argument('--tid', type=str, default="task id")
 
     # Parse the command-line arguments
     args = parser.parse_args()
