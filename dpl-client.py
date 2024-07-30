@@ -355,14 +355,40 @@ def main():
 
         def fit(self, parameters, config):
             self.set_parameters(parameters)
+            local_trainer=build_local_trainer(net=net,
+                                              local_train_dataset=train_data,
+                                              local_eval_dataset=eval_data,
+                                              optim="adamw_torch",
+                                              tokenizer=tokenizer,
+                                              local_micro_batch_size=args.micro_batch_size,
+                                              gradient_accumulation_steps=args.batch_size//args.micro_batch_size,
+                                              local_num_epochs=args.client_epochs,
+                                              local_learning_rate=args.client_lr,
+                                              group_by_length=False,
+                                              warmup=0,
+                                             )
             logging.info(f"Client {RANK} Training Started...")
-            train(net, trainloader, epochs=args.client_epochs, lr=args.client_lr)
-            return self.get_parameters(), len(trainloader), {}
+            result = local_trainer.train()
+            print(f"trained on {len(train_data)} number of dataset")
+            print(local_trainer.state.log_history[-2])
+            print(local_trainer.state.log_history[-1])
+            print(result.metrics)
+            return self.get_parameters(), len(train_data), {}
 
         def evaluate(self, parameters, config):
             self.set_parameters(parameters)
-            loss, accuracy = test(net, testloader)
-            return float(loss), len(testloader), {"accuracy": float(accuracy)}
+            eval_results = test(net, tokenizer, test_data, 1, args.micro_batch_size)
+            print(eval_results)
+            loss = eval_results["eval_loss"]
+            eval_rouge1 = eval_results["eval_rouge1"]
+            eval_rouge2 = eval_results["eval_rouge2"]
+            eval_rougeL = eval_results["eval_rougeL"]
+            eval_rougeLsum = eval_results["eval_rougeLsum"]
+            result_dict = {"eval_rouge1": float(eval_results["eval_rouge1"]),
+                           "eval_rouge2": float(eval_results["eval_rouge2"]),
+                           "eval_rougeL": float(eval_results["eval_rougeL"]),
+                           "eval_rougeLsum": float(eval_results["eval_rougeLsum"])}
+            return float(loss), len(test_data), result_dict #{"accuracy": float(accuracy)}
 
     # HetLoRA client
     class HetLoRA_Client(fl.client.NumPyClient):
@@ -477,9 +503,6 @@ def main():
         
             parameters = delta_w
             old_parameters = [val.cpu().numpy() for _, val in state_dict.items()]
-            print(parameters[0].shape)
-            print("what's the difference")
-            print(old_parameters[0].shape)
 
             return parameters
 
