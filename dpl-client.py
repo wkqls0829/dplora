@@ -463,6 +463,9 @@ def main():
             return float(loss), len(testloader), {"accuracy": float(accuracy)}
 
     class DPLoRA_Client(fl.client.NumPyClient):
+        def __init__(self):
+            self.basis = {}
+
         def get_parameters(self, config=None):
             state_dict = get_peft_model_state_dict(net)
             
@@ -505,13 +508,17 @@ def main():
                     return [range(args.local_r) for _ in range(len(peft_state_dict_keys)//2)]
                 for k, v in state_dict.items():
                     if "lora_B" in k:
-                        projection_basis.append(list(torch.topk(torch.norm(prev_state_dict[k].cpu() - v.cpu(), dim=1)[:args.lora_r], args.local_r).indices))
+                        _basis = list(torch.topk(torch.norm(prev_state_dict[k].cpu() - v.cpu(), dim=1)[:args.lora_r], args.local_r).indices)
+                        projection_basis.append(_basis)
+                        self.basis[k] = _basis #"_".join([str(tensor.item()) for tensor in _basis])
 
 
             else:
                 projection_basis = [range(args.local_r) for _ in range(len(peft_state_dict_keys)//2)]
-
+            
+            
             print(projection_basis)
+            print(self.basis)
 
             return projection_basis
 
@@ -570,7 +577,8 @@ def main():
                            "eval_rougeL": float(eval_results["eval_rougeL"]),
                            "eval_rougeLsum": float(eval_results["eval_rougeLsum"]),
                            "client": RANK,
-                           "dataset": args.data_name}
+                           "dataset": args.data_name,
+                           }
             return float(loss), len(test_data), result_dict #{"accuracy": float(accuracy)}
 
     # Start client
