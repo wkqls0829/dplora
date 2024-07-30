@@ -28,6 +28,7 @@ class Args:
     device: int
     mode: str
     projection_type: str
+    tid: str
 
 
 def parse_args() -> Args:
@@ -45,8 +46,8 @@ def parse_args() -> Args:
     parser.add_argument('--teacher_ckpt', type=str, default="bert-base-uncased")
     parser.add_argument('--client_ckpt', type=str, default="distilbert-base-uncased")
 
-    parser.add_argument('--client_lr', type=float, default=5e-5)
-    parser.add_argument('--distill_lr', type=float, default=5e-5)
+    parser.add_argument('--client_lr', type=float, default=1e-6)
+    parser.add_argument('--distill_lr', type=float, default=1e-6)
     
     parser.add_argument('--lda', type=float, default=0.1)
     parser.add_argument('--gamma', type=float, default=0.95)
@@ -61,6 +62,8 @@ def parse_args() -> Args:
     parser.add_argument('--output_dir', type=str, default="./outputs")
     parser.add_argument('--mode', type=str, default="lora")
     parser.add_argument('--projection_type', type=str, default="type of projection for pd lora")
+
+    parser.add_argument('--tid', type=str, default="task id")
 
     # Parse the command-line arguments
     args = parser.parse_args()
