@@ -13,13 +13,13 @@ mode=dplora
 projection_type=gradient
 learning_rate=1e-8
 
-tid=00000
+tid=00001
 
 nohup python -u server.py \
     --num_client $num_client --data_name $data_name --rank 0 \
     --num_rounds $num_rounds --client_epochs $client_epochs --client_ckpt $model \
     --mode $mode --lora_r $lora_r --client_lr $learning_rate --tid $tid\
-    > test.log 2>&1 &
+    > sest.log 2>&1 &
 
 for client in 0 1 2
 do
@@ -31,5 +31,5 @@ do
         --num_rounds $num_rounds --client_epochs $client_epochs --client_ckpt $model \
         --mode $mode --lora_r $lora_r --local_r $local_r --client_lr $learning_rate \
         --device $device --projection_type $projection_type --tid $tid \
-        > outputs/test_${client}.log 2>&1 &
+        > outputs/sest_${client}.log 2>&1 &
 done
