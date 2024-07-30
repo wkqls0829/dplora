@@ -364,6 +364,10 @@ def main():
 
         def fit(self, parameters, config):
             self.set_parameters(parameters)
+            if args.mode in ["ffalora", "dplora"]:
+                for name, module in net.named_modules():
+                    if "_A" in name:
+                        module.requires_grad = False
             local_trainer=build_local_trainer(net=net,
                                               local_train_dataset=train_data,
                                               local_eval_dataset=eval_data,
@@ -396,7 +400,9 @@ def main():
             result_dict = {"eval_rouge1": float(eval_results["eval_rouge1"]),
                            "eval_rouge2": float(eval_results["eval_rouge2"]),
                            "eval_rougeL": float(eval_results["eval_rougeL"]),
-                           "eval_rougeLsum": float(eval_results["eval_rougeLsum"])}
+                           "eval_rougeLsum": float(eval_results["eval_rougeLsum"]),
+                           "client": RANK,
+                           "dataset": args.data_name}
             return float(loss), len(test_data), result_dict #{"accuracy": float(accuracy)}
 
     # HetLoRA client
@@ -562,6 +568,9 @@ def main():
 
         def fit(self, parameters, config):
             self.set_parameters(parameters)
+            for name, module in net.named_modules():
+                if "_A" in name:
+                    module.requires_grad = False
             local_trainer=build_local_trainer(net=net,
                                               local_train_dataset=train_data,
                                               local_eval_dataset=eval_data,
