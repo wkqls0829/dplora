@@ -18,6 +18,7 @@ def weighted_average(metrics):
 
     # Sort metrics based on client number
     metrics_sorted = sorted(metrics, key=lambda x: x[1]["client"])
+    print(metrics_sorted)
     
     total_examples = sum(num_examples for num_examples, _ in metrics_sorted)
     weighted_sums = {"eval_rouge1": 0, "eval_rouge2": 0, "eval_rougeL": 0, "eval_rougeLsum": 0}
