@@ -1,9 +1,9 @@
 #!/bin/bash
 
-num_client=4
+num_client=8
 data_path=~/dplora/pubmed/data
-data_names=(0 1 2 3)
-data_name=0
+data_names=(0 1 2 3 4 5 6 7)
+data_name=pubmedqa
 lora_r=64
 num_rounds=2
 client_epochs=1
@@ -21,9 +21,10 @@ nohup python -u server.py \
     --mode $mode --lora_r $lora_r --client_lr $learning_rate --tid $tid \
     > outputs/${tid}.out 2>&1 &
 
-for client in 0 1 2 3
+for client in 0 1 2 3 4 5 6 7
 do
-    device=$((client+4))
+    export CUDA_VISIBLE_DEVICES=$client
+    device=0 #$((client+4))
     data_name=${data_names[$client]}
     local_r=16
     nohup python -u dpl-client.py \

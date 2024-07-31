@@ -10,7 +10,7 @@ import evaluate
 from evaluate import load as load_metric
 
 import datasets
-from datasets import load_dataset
+from datasets import load_dataset, Dataset
 from utils.prompter import Prompter
 from utils.data_utils import tokenize
 
@@ -30,6 +30,8 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from arguments import parse_args
 from data_loader import load_data
 
+import json
+
 datasets.utils.logging.set_verbosity_error()
 
 transformers.logging.set_verbosity_error()
@@ -42,11 +44,13 @@ RANK = args.rank
 NUM_CLIENTS = args.num_clients
 NUM_SPLITS = NUM_CLIENTS + 1  # teacher also has a split
 
-device = torch.device(f'cuda:{args.device}' if torch.cuda.is_available() else 'cpu')
-torch.cuda.set_device(device)
-print(f"current device is {device}")
+#device = torch.device(f'cuda:{args.device}' if torch.cuda.is_available() else 'cpu')
+#torch.cuda.set_device(device)
+#print(f"current device is {device}")
 
 DEVICE = torch.cuda.current_device()
+print(f"current device is {DEVICE}")
+
 CHECKPOINT = args.client_ckpt
 
 # wandb.init(project="DPLoRA_" + args.data_name,
@@ -318,18 +322,87 @@ def main():
     train_path = os.path.join(args.data_path, train_data_name)
     eval_path = os.path.join(args.data_path, eval_data_name)
     test_path = os.path.join(args.data_path, test_data_name)
-    train_data = load_dataset("json", data_files=train_path)
-    eval_data = load_dataset("json", data_files=eval_path)
-    test_data = load_dataset("json", data_files=test_path)
-    # loaded_data = load_dataset("json", data_files=train_path, field=["Categories", "Definition", "Input_language", "Output_language", "Positive Examples"])
-    # print(f'loading data from {loaded_data["Categories"]} with language {loaded_data["Input_language"]} to {loaded_data["Output_language"]}')
-    # train_data = loaded_data["Positive Examples"]
-    # train_data["instruction"] = loaded_data["Definition"] 
-    # train_eval_data = train_data["train"].train_test_split(test_size=0.2)
-    train_data = train_data["train"].shuffle().map(generate_and_tokenize_prompt)
-    eval_data = eval_data["train"].shuffle().map(generate_and_tokenize_prompt)
-    test_data = test_data["train"].shuffle().map(generate_and_tokenize_prompt)
 
+    def tokenize_function(example):
+        return tokenizer(example["instruction"], example["input"], example["output"], truncation=True, padding="max_length")
+
+    with open(train_path) as f:
+        data = json.load(f)
+
+    # Create lists for instructions, inputs, and outputs
+    instructions = [item['instruction'] for item in data]
+    inputs = [' '.join(item['input']) for item in data]  # Combining input fields into one string
+    outputs = [item['output'] for item in data]
+
+    # Create a dataset
+    dataset_dict = {
+        'instruction': instructions,
+        'input': inputs,
+        'output': outputs  # Rename to 'labels' for the target variable
+    }
+    dataset = Dataset.from_dict(dataset_dict)
+
+    tokenized_dataset = dataset.map(tokenize_function, batched=True)
+
+    # Prepare data for Trainer
+    train_data = tokenized_dataset.remove_columns(['instruction', 'input', "output"])
+    train_data.set_format("torch")
+
+    with open(eval_path) as f:
+        data = json.load(f)
+
+    # Create lists for instructions, inputs, and outputs
+    instructions = [item['instruction'] for item in data]
+    inputs = [' '.join(item['input']) for item in data]  # Combining input fields into one string
+    outputs = [item['output'] for item in data]
+
+    # Create a dataset
+    dataset_dict = {
+        'instruction': instructions,
+        'input': inputs,
+        'output': outputs  # Rename to 'labels' for the target variable
+    }
+    eval_dataset = Dataset.from_dict(dataset_dict)
+
+    tokenized_dataset = eval_dataset.map(tokenize_function, batched=True)
+
+    # Prepare data for Trainer
+    eval_data = tokenized_dataset.remove_columns(['instruction', 'input', "output"])
+    eval_data.set_format("torch")
+
+    with open(test_path) as f:
+        data = json.load(f)
+
+    # Create lists for instructions, inputs, and outputs
+    instructions = [item['instruction'] for item in data]
+    inputs = [' '.join(item['input']) for item in data]  # Combining input fields into one string
+    outputs = [item['output'] for item in data]
+
+    # Create a dataset
+    dataset_dict = {
+        'instruction': instructions,
+        'input': inputs,
+        'output': outputs  # Rename to 'labels' for the target variable
+    }
+    test_dataset = Dataset.from_dict(dataset_dict)
+
+    tokenized_dataset = test_dataset.map(tokenize_function, batched=True)
+
+    # Prepare data for Trainer
+    test_data = tokenized_dataset.remove_columns(['instruction', 'input', "output"])
+    test_data.set_format("torch")
+
+    # train_path = os.path.join(args.data_path, train_data_name)
+    # eval_path = os.path.join(args.data_path, eval_data_name)
+    # test_path = os.path.join(args.data_path, test_data_name)
+
+    # train_data = load_dataset("json", data_files=train_path)
+    # eval_data = load_dataset("json", data_files=eval_path)
+    # test_data = load_dataset("json", data_files=test_path)
+
+    # train_data = train_data["train"].shuffle().map(generate_and_tokenize_prompt)
+    # eval_data = eval_data["train"].shuffle().map(generate_and_tokenize_prompt)
+    # test_data = test_data["train"].shuffle().map(generate_and_tokenize_prompt)
 
     print("train data is")
     print(train_data)
@@ -471,7 +544,7 @@ def main():
             new_params = []
 
             for dw in delta_w:
-                u, s, v = torch.svd(torch.Tensor(dw).to(device))
+                u, s, v = torch.svd(torch.Tensor(dw).to(DEVICE))
                 s = torch.diag(s)
                 B = torch.mm(u[:, :args.lora_r], s[:args.lora_r,:args.lora_r])
                 A = v[:args.lora_r, :]
@@ -481,7 +554,7 @@ def main():
             for i, (k, v) in enumerate(params_dict):
                 if "lora" in k:
                     v = new_params[i]
-            state_dict = {k: torch.tensor(v).to(device) for k, v in params_dict}
+            state_dict = {k: torch.tensor(v).to(DEVICE) for k, v in params_dict}
             self.state_dict_mem = state_dict
 
             set_peft_model_state_dict(net, state_dict)
@@ -560,7 +633,7 @@ def main():
             new_lora_params = []
 
             for dw in delta_w:
-                u, s, v = torch.svd(torch.Tensor(dw).to(device))
+                u, s, v = torch.svd(torch.Tensor(dw).to(DEVICE))
                 s = torch.diag(s)
                 B = torch.mm(u[:, :args.lora_r], s[:args.lora_r,:args.lora_r])
                 A = v[:args.lora_r, :]

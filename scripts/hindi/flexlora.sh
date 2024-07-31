@@ -23,7 +23,8 @@ nohup python -u server.py \
 
 for client in 0 1 2 3
 do
-    device=$((client+4))
+    export CUDA_VISIBLE_DEVICES=$client
+    device=0 #$((client+4))
     data_name=${data_names[$client]}
     local_r=16
     nohup python -u dpl-client.py \
