@@ -301,12 +301,15 @@ def main():
         )
         tokenized_full_prompt = tokenize(tokenizer, full_prompt, cutoff_len=512, add_eos_token=True)
         return tokenized_full_prompt
+
     data_names = os.listdir(args.data_path)
+    
     for dn in data_names:
         if "training_" + args.data_name + ".json" in dn:
             train_data_name = dn
         if "eval_" + args.data_name + ".json" in dn:
             eval_data_name = dn
+            test_data_name = dn
         if "test_" + args.data_name + ".json" in dn:
             test_data_name = dn
 
