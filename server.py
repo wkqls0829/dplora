@@ -186,15 +186,24 @@ if __name__ == "__main__":
     wandb.config.update({"task_id": args.tid})
 
     current_round = 0
-
+    
     # Define strategy
-    strategy = DPLoRA( #fl.server.strategy.FedAvg(
-        fraction_fit=1.0,
-        fraction_evaluate=1.0,
-        evaluate_metrics_aggregation_fn=weighted_average,
-        min_available_clients=args.num_clients,
-        min_fit_clients=args.num_clients,
-    )
+    if args.mode == "dplora":
+        strategy = DPLoRA( #fl.server.strategy.FedAvg(
+            fraction_fit=1.0,
+            fraction_evaluate=1.0,
+            evaluate_metrics_aggregation_fn=weighted_average,
+            min_available_clients=args.num_clients,
+            min_fit_clients=args.num_clients,
+        )
+    else:
+        strategy = fl.server.strategy.FedAvg(
+            fraction_fit=1.0,
+            fraction_evaluate=1.0,
+            evaluate_metrics_aggregation_fn=weighted_average,
+            min_available_clients=args.num_clients,
+            min_fit_clients=args.num_clients,
+            )
 
     # Start server
     t1 = time.perf_counter()
@@ -209,10 +218,3 @@ if __name__ == "__main__":
     )
     save_run_as_json(args, history, extra_data=extra_data)
     
-    # strategy = fl.server.strategy.FedAvg(
-    #             fraction_fit=1.0,
-    #             fraction_evaluate=1.0,
-    #             evaluate_metrics_aggregation_fn=weighted_average,
-    #             min_available_clients=args.num_clients,
-    #             min_fit_clients=args.num_clients,
-    #             )
