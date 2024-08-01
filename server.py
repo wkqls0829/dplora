@@ -106,7 +106,13 @@ class DPLoRA(fl.server.strategy.FedAvg):
                     lora_dW /= sum(num_examples)
                     
                     ### decompose
-                    B_dist, E_dist, A_dist = np.linalg.svd(lora_dW, full_matrices=True)
+                    #B_dist, E_dist, A_dist = np.linalg.svd(lora_dW, full_matrices=True)
+                    
+                    import torch
+
+                    lora_dW_gpu = torch.tensor(lora_dW, device='cuda')
+                    U, S, V = torch.svd(lora_dW_gpu)
+                    B_dist, E_dist, A_dist = U.cpu().numpy(), S.cpu().numpy(), V.cpu().numpy()
 
                     aggregated_params.append(A_dist[:args.lora_r, :])
                     aggregated_params.append(B_dist[:, :args.lora_r] * E_dist[:args.lora_r])
