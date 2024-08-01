@@ -1,10 +1,21 @@
 import flwr as fl
+from flwr.common import ndarrays_to_parameters, parameters_to_ndarrays
+from transformers import AutoModelForCausalLM
 from arguments import parse_args, pretty_print_args
 from output_result import save_run_as_json
 import time
+from pprint import pprint
 import logging
 logging.basicConfig(level=logging.INFO, handlers=[logging.StreamHandler()])
 
+from peft import (
+    get_peft_model,
+    get_peft_model_state_dict,
+    set_peft_model_state_dict,
+    LoraConfig,
+)
+
+import numpy as np
 import datetime
 import wandb
 
@@ -12,6 +23,110 @@ args = parse_args()
 pretty_print_args(args)
 NUM_CLIENTS = args.num_clients
 NUM_SPLITS = NUM_CLIENTS + 1
+
+CHECKPOINT = args.client_ckpt
+DEVICE = "cpu"
+
+net = AutoModelForCausalLM.from_pretrained(
+        args.client_ckpt,
+        trust_remote_code=True
+    )
+
+peft_config = LoraConfig(
+    task_type="CAUSAL_LM",
+    inference_mode=False, 
+    #target_modules=["query", "key", "value"],
+    target_modules=["q_proj", "v_proj", "k_proj"], #, "o_proj", "gate_proj", "down_proj", "up_proj"],
+    r=args.lora_r, 
+    lora_alpha=16, 
+    lora_dropout=0.1)
+
+net = get_peft_model(net, peft_config)
+param_keys = get_peft_model_state_dict(net).keys()
+
+del net
+
+class DPLoRA(fl.server.strategy.FedAvg):
+
+    def configure_fit(self, server_round, parameters, client_manager):
+
+        config = {"round": server_round}
+        if self.on_fit_config_fn is not None:
+            config = self.on_fit_config_fn(server_round)
+        fit_ins = fl.common.FitIns(parameters, config)
+
+        # Sample clients
+        sample_size, min_num_clients = self.num_fit_clients(
+            client_manager.num_available()
+        )
+        clients = client_manager.sample(
+            num_clients=sample_size, min_num_clients=min_num_clients
+        )
+
+        return [(client, fit_ins) for client in clients]
+
+    def configure_evaluate(self, server_round, parameters, client_manager):
+
+        config = {"round": server_round}
+
+        sample_size, min_num_clients = self.num_fit_clients(
+            client_manager.num_available()
+        )
+
+        evaluate_ins = fl.common.EvaluateIns(parameters, config)
+        return [(client_proxy, evaluate_ins) for client_proxy in client_manager.sample(
+            num_clients=sample_size
+        )]
+    
+    def aggregate_fit(self, rnd, results, failures):
+        aggregated_params = []
+        
+        if results:
+            weights_results = []
+            num_examples = []
+            for _, fit_res in results:
+                weights_results.append(parameters_to_ndarrays(fit_res.parameters))
+                num_examples.append(fit_res.num_examples)
+            pprint(num_examples)
+
+            print(len(weights_results))
+            print(len(weights_results[0]))
+            
+            ts = time.time()
+
+            for i, key in enumerate(param_keys):
+                if "lora_A" in key:
+                    
+                    ### dW = B * A
+                    for j, (wr, ne) in enumerate(zip(weights_results, num_examples)):
+                        if not j:
+                            lora_dW = ne * (np.dot(wr[i + 1], wr[i]))
+                        else:
+                            lora_dW += ne * (np.dot(wr[i + 1], wr[i]))
+                    lora_dW /= sum(num_examples)
+                    
+                    ### decompose
+                    B_dist, E_dist, A_dist = np.linalg.svd(lora_dW, full_matrices=True)
+
+                    aggregated_params.append(A_dist[:args.lora_r, :])
+                    aggregated_params.append(B_dist[:, :args.lora_r] * E_dist[:args.lora_r])
+
+
+                elif "weight" in key or "bias" in key:
+                    
+                    ### Same as FedAvg
+                    for j, (wr, ne) in enumerate(zip(weights_results, num_examples)):
+                        if not j:
+                            dW = ne * wr[i]
+                        else:
+                            dW += ne * wr[i]
+                    dW /= sum(num_examples)
+                    aggregated_params.append(dW)
+            
+            te = time.time()
+            print(te - ts)
+        
+        return ndarrays_to_parameters(aggregated_params), {}
 
 def weighted_average(metrics):
     global current_round
@@ -73,11 +188,12 @@ if __name__ == "__main__":
     current_round = 0
 
     # Define strategy
-    strategy = fl.server.strategy.FedAvg(
+    strategy = DPLoRA( #fl.server.strategy.FedAvg(
         fraction_fit=1.0,
         fraction_evaluate=1.0,
         evaluate_metrics_aggregation_fn=weighted_average,
         min_available_clients=args.num_clients,
+        min_fit_clients=args.num_clients,
     )
 
     # Start server
@@ -92,3 +208,11 @@ if __name__ == "__main__":
         elapsed_time_secs=t2 - t1
     )
     save_run_as_json(args, history, extra_data=extra_data)
+    
+    # strategy = fl.server.strategy.FedAvg(
+    #             fraction_fit=1.0,
+    #             fraction_evaluate=1.0,
+    #             evaluate_metrics_aggregation_fn=weighted_average,
+    #             min_available_clients=args.num_clients,
+    #             min_fit_clients=args.num_clients,
+    #             )
