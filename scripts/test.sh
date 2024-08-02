@@ -2,16 +2,16 @@
 
 num_client=3
 data_path=~/lora/FederatedScope/data/1613/
-data_names=(678 695 696)
+data_names=(390 399 400)
 data_name=0
 lora_r=64
 num_rounds=5
 client_epochs=1
 model=google-bert/bert-base-cased
 # model=datajuicer/LLaMA-1B-dj-refine-150B
-mode=ffalora
+mode=dplora
 projection_type=gradient
-learning_rate=1e-8
+learning_rate=1e-6
 
 tid=00000
 

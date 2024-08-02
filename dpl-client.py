@@ -215,6 +215,8 @@ def test(net, tokenizer, test_data, epoch, local_micro_batch_size):
         label_str = tokenizer.batch_decode(labels_ids, skip_special_tokens=True)
         rouge = evaluate.load('./evaluate/metrics/rouge/rouge.py')
         rouge_output = rouge.compute(predictions=pred_str, references=label_str, use_aggregator=True)
+
+
         return {
             'rouge1': round(rouge_output["rouge1"], 4),
             'rouge2': round(rouge_output["rouge2"], 4),
@@ -299,8 +301,10 @@ def main():
             data_point["input"],
             data_point["output"],
         )
+        print(full_prompt)
         tokenized_full_prompt = tokenize(tokenizer, full_prompt, cutoff_len=512, add_eos_token=True)
         return tokenized_full_prompt
+
     data_names = os.listdir(args.data_path)
     for dn in data_names:
         if "training_" + args.data_name + ".json" in dn:
