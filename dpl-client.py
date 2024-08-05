@@ -36,6 +36,7 @@ transformers.logging.set_verbosity_error()
 warnings.filterwarnings("ignore", category=UserWarning)
 
 os.environ['WANDB_DISABLED'] = 'true'
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 args = parse_args()
 RANK = args.rank
@@ -443,63 +444,43 @@ def main():
 
         def fit(self, parameters, config):
             self.set_parameters(parameters)
+            local_trainer=build_local_trainer(net=net,
+                                              local_train_dataset=train_data,
+                                              local_eval_dataset=eval_data,
+                                              optim="adamw_torch",
+                                              tokenizer=tokenizer,
+                                              local_micro_batch_size=args.micro_batch_size,
+                                              gradient_accumulation_steps=args.batch_size//args.micro_batch_size,
+                                              local_num_epochs=args.client_epochs,
+                                              local_learning_rate=args.client_lr,
+                                              group_by_length=False,
+                                              warmup=0,
+                                             )
             logging.info(f"Client {RANK} Training Started...")
-            train(net, trainloader, epochs=args.client_epochs, lr=args.client_lr)
-            return self.get_parameters(), len(trainloader), {}
+            result = local_trainer.train()
+            print(f"trained on {len(train_data)} number of dataset")
+            print(local_trainer.state.log_history[-2])
+            print(local_trainer.state.log_history[-1])
+            print(result.metrics)
+            return self.get_parameters(), len(train_data), {}
 
         def evaluate(self, parameters, config):
             self.set_parameters(parameters)
-            loss, accuracy = test(net, testloader)
-            return float(loss), len(testloader), {"accuracy": float(accuracy)}
+            eval_results = test(net, tokenizer, test_data, 1, args.micro_batch_size)
+            print(eval_results)
+            loss = eval_results["eval_loss"]
+            eval_rouge1 = eval_results["eval_rouge1"]
+            eval_rouge2 = eval_results["eval_rouge2"]
+            eval_rougeL = eval_results["eval_rougeL"]
+            eval_rougeLsum = eval_results["eval_rougeLsum"]
+            result_dict = {"eval_rouge1": float(eval_results["eval_rouge1"]),
+                           "eval_rouge2": float(eval_results["eval_rouge2"]),
+                           "eval_rougeL": float(eval_results["eval_rougeL"]),
+                           "eval_rougeLsum": float(eval_results["eval_rougeLsum"]),
+                           "client": RANK,
+                           "dataset": args.data_name}
+            return float(loss), len(test_data), result_dict #{"accuracy": float(accuracy)}
 
-    class SVDLoRA_Client(fl.client.NumPyClient):
-        def get_parameters(self, config=None):
-            state_dict = get_peft_model_state_dict(net)
-            
-            delta_w = []
-            for k, v in state_dict.items():
-                if "lora_A" in k:
-                    param_A = v[args.local_r:, :]
-                elif "lora_B" in k:
-                    dw = torch.mm(v[:, args.local_r:], param_A).cpu().numpy()
-                    delta_w.append(dw)
-
-                    
-            parameters = [val.cpu().numpy() for _, val in state_dict.items()] + delta_w
-
-            return parameters
-
-        def set_parameters(self, parameters):
-            params_dict = zip(peft_state_dict_keys, parameters[:len(peft_state_dict_keys)])
-            delta_w = parameters[len(peft_state_dict_keys):]
-            new_params = []
-
-            for dw in delta_w:
-                u, s, v = torch.svd(torch.Tensor(dw).to(device))
-                s = torch.diag(s)
-                B = torch.mm(u[:, :args.lora_r], s[:args.lora_r,:args.lora_r])
-                A = v[:args.lora_r, :]
-                new_params.append(A)
-                new_params.append(B)
-
-            for i, (k, v) in enumerate(params_dict):
-                if "lora" in k:
-                    v = new_params[i]
-            state_dict = {k: torch.tensor(v).to(device) for k, v in params_dict}
-            self.state_dict_mem = state_dict
-
-            set_peft_model_state_dict(net, state_dict)
-
-        def fit(self, parameters, config):
-            self.set_parameters(parameters)
-            logging.info(f"Client {RANK} Training Started...")
-            train(net, trainloader, epochs=args.client_epochs, lr=args.client_lr)
-            return self.get_parameters(), len(trainloader), {}
-
-        def evaluate(self, parameters, config):
-            self.set_parameters(parameters)
-            loss, accuracy = test(net, testloader)
-            return float(loss), len(testloader), {"accuracy": float(accuracy)}
 
     class DPLoRA_Client(fl.client.NumPyClient):
         def __init__(self):

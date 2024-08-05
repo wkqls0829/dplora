@@ -118,7 +118,8 @@ class DPLoRA(fl.server.strategy.FedAvg):
                     aggregated_params.append(B_dist[:, :args.lora_r] * E_dist[:args.lora_r])
 
 
-                elif "weight" in key or "bias" in key:
+                elif ("weight" in key or "bias" in key) and ("lora_B" not in key) :
+                    print(key)
                     
                     ### Same as FedAvg
                     for j, (wr, ne) in enumerate(zip(weights_results, num_examples)):

@@ -9,7 +9,7 @@ num_rounds=5
 client_epochs=1
 # model=google-bert/bert-base-cased
 model=datajuicer/LLaMA-1B-dj-refine-150B
-mode=dplora
+mode=hetlora
 projection_type=gradient
 learning_rate=1e-5
 
@@ -23,7 +23,7 @@ nohup python -u server.py \
 
 for client in 0 1 2
 do
-    export CUDA_VISIBLE_DEVICES=$((client+4))
+    export CUDA_VISIBLE_DEVICES=$((client+2))
     device=0
     data_name=${data_names[$client]}
     local_r=16

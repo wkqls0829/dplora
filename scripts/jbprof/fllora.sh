@@ -1,33 +1,36 @@
 #!/bin/bash
 
 num_client=4
-data_path=~/dplora/pubmed/data
-data_names=(0 1 2 3)
+data_path=~/lora/FederatedScope/data/1613/
+data_names=(390 399 400 407)
 data_name=0
 lora_r=64
-num_rounds=5
+num_rounds=20
 client_epochs=1
-learning_rate=5e-5
-# model=google-bert/bert-base-cased
+learning_rate=5e-4
+
+#model=google-bert/bert-base-cased
 model=datajuicer/LLaMA-1B-dj-refine-150B
 mode=base
 projection_type=gradient
+local_ranks=(64 16 8 4)
 
-tid=10605
+tid=10303
 
-export CUDA_VISIBLE_DEVICES=7
+export CUDA_VISIBLE_DEVICES=0
 nohup python -u server.py \
     --num_client $num_client --data_name $data_name --rank 0 \
     --num_rounds $num_rounds --client_epochs $client_epochs --client_ckpt $model \
     --mode $mode --lora_r $lora_r --client_lr $learning_rate --tid $tid \
-    > outputs/${tid}.out 2>&1 &
+    > outputs/${tid}.log 2>&1 &
 
 for client in 0 1 2 3
 do
-    export CUDA_VISIBLE_DEVICES=$client
+    export CUDA_VISIBLE_DEVICES=$((client+2))
     device=0 #$((client+4)))
     data_name=${data_names[$client]}
-    local_r=64
+    local_r=16
+    # local_r=${local_ranks[$client]}
     nohup python -u dpl-client.py \
         --num_client $num_client --data_path $data_path --data_name $data_name --rank $client \
         --num_rounds $num_rounds --client_epochs $client_epochs --client_ckpt $model \
