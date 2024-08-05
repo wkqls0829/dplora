@@ -36,6 +36,7 @@ transformers.logging.set_verbosity_error()
 warnings.filterwarnings("ignore", category=UserWarning)
 
 os.environ['WANDB_DISABLED'] = 'true'
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 args = parse_args()
 RANK = args.rank
