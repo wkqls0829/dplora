@@ -1,8 +1,8 @@
 #!/bin/bash
 
 num_client=4
-data_path=~/lora/FederatedScope/data/1613/
-data_names=(549 1514 570 521)
+data_path=~/dplora/pubmed/data
+data_names=(0 1 2 3)
 data_name=0
 lora_r=64
 num_rounds=5
@@ -13,7 +13,7 @@ model=google-bert/bert-base-cased
 mode=base
 projection_type=gradient
 
-tid=10305
+tid=10605
 
 nohup python -u server.py \
     --num_client $num_client --data_name $data_name --rank 0 \

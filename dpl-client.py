@@ -279,13 +279,12 @@ def main():
     # ).to(DEVICE)
     prompter = Prompter()
     
-    print(tokenizer)
 
     peft_config = LoraConfig(
         task_type="CAUSAL_LM",
         inference_mode=False, 
-        target_modules=["query", "key", "value"],
-        # target_modules=["q_proj", "v_proj", "k_proj", "o_proj", "gate_proj", "down_proj", "up_proj"],
+        #target_modules=["query", "key", "value"],
+        target_modules=["q_proj", "v_proj", "k_proj"], #, "o_proj", "gate_proj", "down_proj", "up_proj"],
         r=args.lora_r, 
         lora_alpha=16, 
         lora_dropout=0.1)
@@ -301,16 +300,17 @@ def main():
             data_point["input"],
             data_point["output"],
         )
-        print(full_prompt)
         tokenized_full_prompt = tokenize(tokenizer, full_prompt, cutoff_len=512, add_eos_token=True)
         return tokenized_full_prompt
 
     data_names = os.listdir(args.data_path)
+    
     for dn in data_names:
         if "training_" + args.data_name + ".json" in dn:
             train_data_name = dn
         if "eval_" + args.data_name + ".json" in dn:
             eval_data_name = dn
+            test_data_name = dn
         if "test_" + args.data_name + ".json" in dn:
             test_data_name = dn
 
@@ -330,6 +330,9 @@ def main():
     train_data = train_data["train"].shuffle().map(generate_and_tokenize_prompt)
     eval_data = eval_data["train"].shuffle().map(generate_and_tokenize_prompt)
     test_data = test_data["train"].shuffle().map(generate_and_tokenize_prompt)
+    train_data.set_format("torch")
+    eval_data.set_format("torch")
+    test_data.set_format("torch")
 
 
     print("train data is")
@@ -507,26 +510,20 @@ def main():
             
             try:
                 projection_basis = self.get_projection_basis()
+
             except AttributeError:
                 projection_basis = [range(args.local_r) for _ in range(len(peft_state_dict_keys)//2)]
                 print(f"parameter not set yet")
-
-
-            delta_w = []
+            
             i = 0
             for k, v in state_dict.items():
                 if "lora_A" in k:
-                    param_A = v[projection_basis[i], :]
+                    state_dict[k] = v[projection_basis[i], :].clone()
                 elif "lora_B" in k:
-                    dw = torch.mm(v[:, projection_basis[i]], param_A).cpu().numpy()
-                    delta_w.append(dw)
+                    state_dict[k] = v[:, projection_basis[i]].clone()
                     i += 1
-
-        
-            parameters = delta_w
-            old_parameters = [val.cpu().numpy() for _, val in state_dict.items()]
-
-            return parameters
+            
+            return [val.cpu().numpy() for _, val in state_dict.items()]
 
         def get_projection_basis(self):
             projection_basis = []
@@ -545,43 +542,27 @@ def main():
                         projection_basis.append(_basis)
                         self.basis[k] = _basis #"_".join([str(tensor.item()) for tensor in _basis])
 
-
             else:
                 projection_basis = [range(args.local_r) for _ in range(len(peft_state_dict_keys)//2)]
             
-            
-            print(projection_basis)
-            print(self.basis)
+            # print(projection_basis)
+            # print(self.basis)
 
             return projection_basis
 
-
         def set_parameters(self, parameters):
-            delta_w = parameters[len(non_lora_keys):]
-            new_lora_params = []
+            from copy import deepcopy
 
-            for dw in delta_w:
-                u, s, v = torch.svd(torch.Tensor(dw).to(device))
-                s = torch.diag(s)
-                B = torch.mm(u[:, :args.lora_r], s[:args.lora_r,:args.lora_r])
-                A = v[:args.lora_r, :]
-                new_lora_params.append(A)
-                new_lora_params.append(B)
-
-            non_lora_params = zip(non_lora_keys, parameters[:len(peft_state_dict_keys)])
-
-            state_dict = {}
-            for k, p in zip(lora_keys, new_lora_params):
-                state_dict[k] = p
-            self.state_dict_mem = state_dict
-
+            state_dict = get_peft_model_state_dict(net)
+            self.state_dict_mem = deepcopy(state_dict)
             set_peft_model_state_dict(net, state_dict)
 
         def fit(self, parameters, config):
             self.set_parameters(parameters)
-            for name, module in net.named_modules():
-                if "_A" in name:
-                    module.requires_grad = False
+            if args.projection_type in ("gradient"):
+                for name, module in net.named_modules():
+                    if "_A" in name:
+                        module.requires_grad = False
             local_trainer=build_local_trainer(net=net,
                                               local_train_dataset=train_data,
                                               local_eval_dataset=eval_data,
