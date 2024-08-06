@@ -306,6 +306,9 @@ def main():
 
     data_names = os.listdir(args.data_path)
     
+    if "_" in args.data_name:
+        args.data_name, args.filter = args.data_name.split("_")
+    
     for dn in data_names:
         if "training_" + args.data_name + ".json" in dn:
             train_data_name = dn
@@ -320,17 +323,34 @@ def main():
     train_path = os.path.join(args.data_path, train_data_name)
     eval_path = os.path.join(args.data_path, eval_data_name)
     test_path = os.path.join(args.data_path, test_data_name)
-    train_data = load_dataset("json", data_files=train_path)
-    eval_data = load_dataset("json", data_files=eval_path)
-    test_data = load_dataset("json", data_files=test_path)
+    
+    if args.filter is not None:
+        if args.filter == "0":
+            train_data = load_dataset("json", data_files=train_path, split="train[:50%]")
+            eval_data = load_dataset("json", data_files=eval_path, split="train[:50%]")
+            test_data = load_dataset("json", data_files=test_path, split="train[:50%]")
+            # train_data["train"] = train_data["train"][:len(train_data)]
+            # eval_data["train"] = eval_data["train"][:len(train_data)]
+            # test_data["train"] = test_data["train"][:len(train_data)]
+        elif args.filter == "1":
+            train_data = load_dataset("json", data_files=train_path, split="train[50%:]")
+            eval_data = load_dataset("json", data_files=eval_path, split="train[50%:]")
+            test_data = load_dataset("json", data_files=test_path, split="train[50%:]")
+        else:
+            raise ValueError("More than 2 splits are not available.")
+    else:
+        train_data = load_dataset("json", data_files=train_path, split="train")
+        eval_data = load_dataset("json", data_files=eval_path, split="train")
+        test_data = load_dataset("json", data_files=test_path, split="train")
+
     # loaded_data = load_dataset("json", data_files=train_path, field=["Categories", "Definition", "Input_language", "Output_language", "Positive Examples"])
     # print(f'loading data from {loaded_data["Categories"]} with language {loaded_data["Input_language"]} to {loaded_data["Output_language"]}')
     # train_data = loaded_data["Positive Examples"]
     # train_data["instruction"] = loaded_data["Definition"] 
     # train_eval_data = train_data["train"].train_test_split(test_size=0.2)
-    train_data = train_data["train"].shuffle().map(generate_and_tokenize_prompt)
-    eval_data = eval_data["train"].shuffle().map(generate_and_tokenize_prompt)
-    test_data = test_data["train"].shuffle().map(generate_and_tokenize_prompt)
+    train_data = train_data.shuffle().map(generate_and_tokenize_prompt)
+    eval_data = eval_data.shuffle().map(generate_and_tokenize_prompt)
+    test_data = test_data.shuffle().map(generate_and_tokenize_prompt)
     train_data.set_format("torch")
     eval_data.set_format("torch")
     test_data.set_format("torch")
