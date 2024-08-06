@@ -56,32 +56,33 @@ CHECKPOINT = args.client_ckpt
 # wandb.run.name = args.tid + "_" + datetime.datetime.strftime(datetime.datetime.now(), "%Y_%m_%d_%T")
 # wandb.config.update({"task_id": args.tid})
 
-def train(net, trainloader, epochs, lr):
-    optimizer = AdamW(net.parameters(), lr=lr, no_deprecation_warning=True)
-    net.train()
-    if args.mode in ["ffalora", "dplora"]:
-        for name, module in net.named_modules():
-            if "_A" in name:
-                module.requires_grad = False
+# def train(net, trainloader, epochs, lr):
+#     optimizer = AdamW(net.parameters(), lr=lr, no_deprecation_warning=True)
+#     net.train()
+#     if args.mode in ["ffalora", "dplora"]:
+#         for name, module in net.named_modules():
+#             if "_A" in name:
+#                 module.requires_grad = False
+#                 module.eval()
 
 
-    criterion = nn.NLLLoss()
+#     criterion = nn.NLLLoss()
 
-    for i in range(epochs):
-        for batch in trainloader:
-            batch = {k: v.to(DEVICE) for k, v in batch.items()}
-            outputs = net(**batch)
-            loss = outputs.loss
+#     for i in range(epochs):
+#         for batch in trainloader:
+#             batch = {k: v.to(DEVICE) for k, v in batch.items()}
+#             outputs = net(**batch)
+#             loss = outputs.loss
             
-            if args.mode == "hetlora":
-                loss = HetLoRALoss(net, criterion, outputs, batch["labels"])
-            else:
-                loss = outputs.loss
+#             if args.mode == "hetlora":
+#                 loss = HetLoRALoss(net, criterion, outputs, batch["labels"])
+#             else:
+#                 loss = outputs.loss
 
 
-            loss.backward()
-            optimizer.step()
-            optimizer.zero_grad()
+#             loss.backward()
+#             optimizer.step()
+#             optimizer.zero_grad()
 
 def HetLoRALoss(net, criterion, outputs, target):
     loss = outputs.loss
@@ -396,6 +397,7 @@ def main():
                 for name, module in net.named_modules():
                     if "_A" in name:
                         module.requires_grad = False
+                        module.eval()
             local_trainer=build_local_trainer(net=net,
                                               local_train_dataset=train_data,
                                               local_eval_dataset=eval_data,
@@ -508,21 +510,22 @@ def main():
 
         def get_parameters(self, config=None):
             state_dict = get_peft_model_state_dict(net)
-            
-            try:
-                projection_basis = self.get_projection_basis()
 
-            except AttributeError:
-                projection_basis = [range(args.local_r) for _ in range(len(peft_state_dict_keys)//2)]
-                print(f"parameter not set yet")
-            
-            i = 0
-            for k, v in state_dict.items():
-                if "lora_A" in k:
-                    state_dict[k] = v[projection_basis[i], :].clone()
-                elif "lora_B" in k:
-                    state_dict[k] = v[:, projection_basis[i]].clone()
-                    i += 1
+            if config and config.get("transmit_subset", True):
+                try:
+                    projection_basis = self.get_projection_basis()
+
+                except AttributeError:
+                    projection_basis = [range(args.local_r) for _ in range(len(peft_state_dict_keys)//2)]
+                    print(f"parameter not set yet")
+                
+                i = 0
+                for k, v in state_dict.items():
+                    if "lora_A" in k:
+                        state_dict[k] = v[projection_basis[i], :].clone()
+                    elif "lora_B" in k:
+                        state_dict[k] = v[:, projection_basis[i]].clone()
+                        i += 1
             
             return [val.cpu().numpy() for _, val in state_dict.items()]
 
@@ -542,28 +545,44 @@ def main():
                         _basis = list(torch.topk(torch.norm(prev_state_dict[k].cpu() - v.cpu(), dim=1)[:args.lora_r], args.local_r).indices)
                         projection_basis.append(_basis)
                         self.basis[k] = _basis #"_".join([str(tensor.item()) for tensor in _basis])
+                        # print(k)
+                        # # print(v.cpu())
+                        # print(torch.topk(torch.norm(prev_state_dict[k].cpu() - v.cpu(), dim=1, p=2)[:args.lora_r], args.lora_r))
+                        # print(torch.topk(torch.norm(prev_state_dict[k].cpu() - v.cpu(), dim=1, p=1)[:args.lora_r], args.lora_r))
+                    # if "lora_A" in k:
+                    #     print(k)
+                    #     print(v.cpu())
+                    #     # _basis = list(torch.topk(torch.norm(prev_state_dict[k].cpu() - v.cpu(), dim=1)[:args.lora_r], args.local_r).indices)
+                    #     # print(k)
+                    #     # print(torch.topk(torch.norm(prev_state_dict[k].cpu() - v.cpu(), dim=1, p=2)[:args.lora_r], args.lora_r))
+                    #     # print(torch.topk(torch.norm(prev_state_dict[k].cpu() - v.cpu(), dim=1, p=1)[:args.lora_r], args.lora_r))
 
             else:
                 projection_basis = [range(args.local_r) for _ in range(len(peft_state_dict_keys)//2)]
             
             # print(projection_basis)
-            # print(self.basis)
+            print(self.basis)
 
             return projection_basis
 
         def set_parameters(self, parameters):
             from copy import deepcopy
 
-            state_dict = get_peft_model_state_dict(net)
+            params_dict = zip(peft_state_dict_keys, parameters)
+            state_dict = {k: torch.Tensor(v) for k, v in params_dict}
             self.state_dict_mem = deepcopy(state_dict)
             set_peft_model_state_dict(net, state_dict)
 
         def fit(self, parameters, config):
             self.set_parameters(parameters)
             if args.projection_type in ("gradient"):
-                for name, module in net.named_modules():
+                for name, param in net.named_parameters():
                     if "_A" in name:
-                        module.requires_grad = False
+                        param.requires_grad = False
+                # for name, module in net.named_modules():
+                #     if "_A" in name:
+                #         module.requires_grad = False
+
             local_trainer=build_local_trainer(net=net,
                                               local_train_dataset=train_data,
                                               local_eval_dataset=eval_data,
@@ -582,7 +601,7 @@ def main():
             # print(local_trainer.state.log_history[-2])
             # print(local_trainer.state.log_history[-1])
 
-            return self.get_parameters(), len(train_data), {}
+            return self.get_parameters({"transmit_subset": True}), len(train_data), {}
 
         def evaluate(self, parameters, config):
             self.set_parameters(parameters)
