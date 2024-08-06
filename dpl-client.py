@@ -504,30 +504,172 @@ def main():
             return float(loss), len(test_data), result_dict #{"accuracy": float(accuracy)}
 
 
-    class DPLoRA_Client(fl.client.NumPyClient):
-        def __init__(self):
-            self.basis = {}
+    # class DPLoRA_Client(fl.client.NumPyClient):
+    #     def __init__(self):
+    #         self.basis = {}
 
+    #     def get_parameters_for_upload(self):
+    #         state_dict = get_peft_model_state_dict(net)
+
+    #         try:
+    #             projection_basis = self.get_projection_basis()
+
+    #         except AttributeError:
+    #             projection_basis = [range(args.local_r) for _ in range(len(peft_state_dict_keys)//2)]
+    #             print(f"parameter not set yet")
+            
+    #         i = 0
+    #         for k, v in state_dict.items():
+    #             if "lora_A" in k:
+    #                 state_dict[k] = v[projection_basis[i], :].clone()
+    #             elif "lora_B" in k:
+    #                 state_dict[k] = v[:, projection_basis[i]].clone()
+    #                 i += 1
+            
+    #         return [val.cpu().numpy() for _, val in state_dict.items()]
+        
+    #     def get_parameters(self, config=None):
+    #         state_dict = get_peft_model_state_dict(net)
+    #         return [val.cpu().numpy() for _, val in state_dict.items()]
+
+    #     # def get_parameters(self, config=None):
+    #     #     state_dict = get_peft_model_state_dict(net)
+
+    #     #     if config and config.get("transmit_subset", True):
+    #     #         try:
+    #     #             projection_basis = self.get_projection_basis()
+
+    #     #         except AttributeError:
+    #     #             projection_basis = [range(args.local_r) for _ in range(len(peft_state_dict_keys)//2)]
+    #     #             print(f"parameter not set yet")
+                
+    #     #         i = 0
+    #     #         for k, v in state_dict.items():
+    #     #             if "lora_A" in k:
+    #     #                 state_dict[k] = v[projection_basis[i], :].clone()
+    #     #             elif "lora_B" in k:
+    #     #                 state_dict[k] = v[:, projection_basis[i]].clone()
+    #     #                 i += 1
+            
+    #     #     return [val.cpu().numpy() for _, val in state_dict.items()]
+
+    #     def get_projection_basis(self):
+    #         projection_basis = []
+    #         if args.projection_type == "fixed":
+    #             fixed_half = args.local_r//2
+    #             projection_basis = [list(range(fixed_half)) + list(range(fixed_half + args.rank-1, fixed_half + args.num_clients*fixed_half, args.num_clients)) for _ in range(len(peft_state_dict_keys)//2)]
+    #             # projection_basis = [range(args.rank - 1,  args.num_clients*args.local_r ,args.client_num) for _ in range(len(peft_state_dict_keys)//2)]
+    #         elif args.projection_type == "gradient":
+    #             state_dict = get_peft_model_state_dict(net)
+    #             prev_state_dict = self.state_dict_mem
+    #             if not prev_state_dict:
+    #                 return [range(args.local_r) for _ in range(len(peft_state_dict_keys)//2)]
+    #             for k, v in state_dict.items():
+    #                 if "lora_B" in k:
+    #                     _basis = list(torch.topk(torch.norm(prev_state_dict[k].cpu() - v.cpu(), dim=1)[:args.lora_r], args.local_r).indices)
+    #                     projection_basis.append(_basis)
+    #                     self.basis[k] = _basis #"_".join([str(tensor.item()) for tensor in _basis])
+    #                     print(k)
+    #                     print(prev_state_dict[k].cpu())
+    #                     print(v.cpu())
+    #                     # print(torch.topk(torch.norm(prev_state_dict[k].cpu() - v.cpu(), dim=1, p=2)[:args.lora_r], args.lora_r))
+    #                     # print(torch.topk(torch.norm(prev_state_dict[k].cpu() - v.cpu(), dim=1, p=1)[:args.lora_r], args.lora_r))
+    #                 if "lora_A" in k:
+    #                     print(k)
+    #                     print(prev_state_dict[k].cpu())
+    #                     print(v.cpu())
+    #                 #     print(k)
+    #                 #     print(v.cpu())
+    #                 #     # _basis = list(torch.topk(torch.norm(prev_state_dict[k].cpu() - v.cpu(), dim=1)[:args.lora_r], args.local_r).indices)
+    #                 #     # print(k)
+    #                 #     # print(torch.topk(torch.norm(prev_state_dict[k].cpu() - v.cpu(), dim=1, p=2)[:args.lora_r], args.lora_r))
+    #                 #     # print(torch.topk(torch.norm(prev_state_dict[k].cpu() - v.cpu(), dim=1, p=1)[:args.lora_r], args.lora_r))
+
+    #         else:
+    #             projection_basis = [range(args.local_r) for _ in range(len(peft_state_dict_keys)//2)]
+            
+    #         # print(projection_basis)
+    #         print(self.basis)
+
+    #         return projection_basis
+
+    #     def set_parameters(self, parameters):
+    #         # from copy import deepcopy
+
+    #         params_dict = zip(peft_state_dict_keys, parameters)
+    #         state_dict = {k: torch.Tensor(v) for k, v in params_dict}
+    #         self.state_dict_mem = state_dict #deepcopy(state_dict)
+    #         set_peft_model_state_dict(net, state_dict)
+
+    #     def fit(self, parameters, config):
+    #         self.set_parameters(parameters)
+    #         if args.projection_type in ("gradient"):
+    #             for name, param in net.named_parameters():
+    #                 if "_A" in name:
+    #                     param.requires_grad = False
+    #             # for name, module in net.named_modules():
+    #             #     if "_A" in name:
+    #             #         module.requires_grad = False
+
+    #         local_trainer=build_local_trainer(net=net,
+    #                                           local_train_dataset=train_data,
+    #                                           local_eval_dataset=eval_data,
+    #                                           optim="adamw_torch",
+    #                                           tokenizer=tokenizer,
+    #                                           local_micro_batch_size=args.micro_batch_size,
+    #                                           gradient_accumulation_steps=args.batch_size//args.micro_batch_size,
+    #                                           local_num_epochs=args.client_epochs,
+    #                                           local_learning_rate=args.client_lr,
+    #                                           group_by_length=False,
+    #                                           warmup=0,
+    #                                          )
+    #         logging.info(f"Client {RANK} Training Started...")
+    #         result = local_trainer.train()
+    #         # print(f"trained on {len(train_data)} number of dataset")
+    #         # print(local_trainer.state.log_history[-2])
+    #         # print(local_trainer.state.log_history[-1])
+
+    #         #return self.get_parameters({"transmit_subset": True}), len(train_data), {}
+    #         return self.get_parameters_for_upload(), len(train_data), {}
+
+    #     def evaluate(self, parameters, config):
+    #         self.set_parameters(parameters)
+    #         eval_results = test(net, tokenizer, test_data, 1, args.micro_batch_size)
+    #         print(eval_results)
+    #         loss = eval_results["eval_loss"]
+
+    #         result_dict = {"eval_rouge1": float(eval_results["eval_rouge1"]),
+    #                        "eval_rouge2": float(eval_results["eval_rouge2"]),
+    #                        "eval_rougeL": float(eval_results["eval_rougeL"]),
+    #                        "eval_rougeLsum": float(eval_results["eval_rougeLsum"]),
+    #                        "client": RANK,
+    #                        "dataset": args.data_name,
+    #                        }
+    #         return float(loss), len(test_data), result_dict #{"accuracy": float(accuracy)}
+
+    class DPLoRA_Client(fl.client.NumPyClient):
         def get_parameters(self, config=None):
             state_dict = get_peft_model_state_dict(net)
-
-            if config and config.get("transmit_subset", True):
-                try:
-                    projection_basis = self.get_projection_basis()
-
-                except AttributeError:
-                    projection_basis = [range(args.local_r) for _ in range(len(peft_state_dict_keys)//2)]
-                    print(f"parameter not set yet")
-                
-                i = 0
-                for k, v in state_dict.items():
-                    if "lora_A" in k:
-                        state_dict[k] = v[projection_basis[i], :].clone()
-                    elif "lora_B" in k:
-                        state_dict[k] = v[:, projection_basis[i]].clone()
-                        i += 1
             
-            return [val.cpu().numpy() for _, val in state_dict.items()]
+            try:
+                projection_basis = self.get_projection_basis()
+            except AttributeError:
+                projection_basis = [range(args.local_r) for _ in range(len(peft_state_dict_keys)//2)]
+                print(f"parameter not set yet")
+
+            delta_w = []
+            i = 0
+            for k, v in state_dict.items():
+                if "lora_A" in k:
+                    param_A = v[projection_basis[i], :]
+                elif "lora_B" in k:
+                    dw = torch.mm(v[:, projection_basis[i]], param_A).cpu().numpy()
+                    delta_w.append(dw)
+                    i += 1
+        
+            parameters = [val.cpu().numpy() for _, val in state_dict.items()] + delta_w
+
+            return parameters
 
         def get_projection_basis(self):
             projection_basis = []
@@ -545,11 +687,15 @@ def main():
                         _basis = list(torch.topk(torch.norm(prev_state_dict[k].cpu() - v.cpu(), dim=1)[:args.lora_r], args.local_r).indices)
                         projection_basis.append(_basis)
                         self.basis[k] = _basis #"_".join([str(tensor.item()) for tensor in _basis])
-                        # print(k)
-                        # # print(v.cpu())
+                        print(k)
+                        print(prev_state_dict[k].cpu())
+                        print(v.cpu())
                         # print(torch.topk(torch.norm(prev_state_dict[k].cpu() - v.cpu(), dim=1, p=2)[:args.lora_r], args.lora_r))
                         # print(torch.topk(torch.norm(prev_state_dict[k].cpu() - v.cpu(), dim=1, p=1)[:args.lora_r], args.lora_r))
-                    # if "lora_A" in k:
+                    if "lora_A" in k:
+                        print(k)
+                        print(prev_state_dict[k].cpu())
+                        print(v.cpu())
                     #     print(k)
                     #     print(v.cpu())
                     #     # _basis = list(torch.topk(torch.norm(prev_state_dict[k].cpu() - v.cpu(), dim=1)[:args.lora_r], args.local_r).indices)
@@ -565,12 +711,27 @@ def main():
 
             return projection_basis
 
-        def set_parameters(self, parameters):
-            from copy import deepcopy
 
-            params_dict = zip(peft_state_dict_keys, parameters)
-            state_dict = {k: torch.Tensor(v) for k, v in params_dict}
-            self.state_dict_mem = deepcopy(state_dict)
+        def set_parameters(self, parameters):
+            params_dict = zip(peft_state_dict_keys, parameters[:len(peft_state_dict_keys)])
+            delta_w = parameters[len(peft_state_dict_keys):]
+            new_params = []
+
+            for dw in delta_w:
+                u, s, v = torch.svd(torch.Tensor(dw).to(device))
+                s = torch.diag(s)
+                B = torch.mm(u[:, :args.lora_r], s[:args.lora_r,:args.lora_r])
+                A = v[:args.lora_r, :]
+                new_params.append(A)
+                new_params.append(B)
+
+            for i, (k, v) in enumerate(params_dict):
+                if "lora" in k:
+                    v = new_params[i]
+            params_dict = zip(peft_state_dict_keys, parameters[:len(peft_state_dict_keys)])
+            state_dict = {k: torch.tensor(v).to(device) for k, v in params_dict}
+            self.state_dict_mem = state_dict
+
             set_peft_model_state_dict(net, state_dict)
 
         def fit(self, parameters, config):
@@ -601,7 +762,8 @@ def main():
             # print(local_trainer.state.log_history[-2])
             # print(local_trainer.state.log_history[-1])
 
-            return self.get_parameters({"transmit_subset": True}), len(train_data), {}
+            #return self.get_parameters({"transmit_subset": True}), len(train_data), {}
+            return self.get_parameters(), len(train_data), {}
 
         def evaluate(self, parameters, config):
             self.set_parameters(parameters)
@@ -617,7 +779,7 @@ def main():
                            "dataset": args.data_name,
                            }
             return float(loss), len(test_data), result_dict #{"accuracy": float(accuracy)}
-
+            
     # Start client
     if args.mode == "hetlora":
         print("starting hetlora")
@@ -626,8 +788,10 @@ def main():
         print("starting svdlora")
         fl.client.start_client(server_address="127.0.0.1:8090", client=SVDLoRA_Client().to_client())
     elif args.mode == "dplora":
+        # from flwr.common import GRPC_MAX_MESSAGE_LENGTH
+        # GRPC_MAX_MESSAGE_LENGTH = 2000000000
         print("starting dplora")
-        fl.client.start_client(server_address="127.0.0.1:8090", client=DPLoRA_Client().to_client())
+        fl.client.start_client(server_address="127.0.0.1:8090", client=DPLoRA_Client().to_client(), grpc_max_message_length=2000000000)
     else:
         print("starting normal lora")
         fl.client.start_client(server_address="127.0.0.1:8090", client=Client().to_client())

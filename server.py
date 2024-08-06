@@ -132,6 +132,9 @@ class DPLoRA(fl.server.strategy.FedAvg):
             
             te = time.time()
             print(te - ts)
+
+            # for i in aggregated_params:
+            #     print(i.shape)
         
         return ndarrays_to_parameters(aggregated_params), {}
 
@@ -193,16 +196,26 @@ if __name__ == "__main__":
     wandb.config.update({"task_id": args.tid})
 
     current_round = 0
+
+    # from flwr.common import GRPC_MAX_MESSAGE_LENGTH
+    # GRPC_MAX_MESSAGE_LENGTH = 2000000000
     
     # Define strategy
     if args.mode == "dplora":
-        strategy = DPLoRA( #fl.server.strategy.FedAvg(
+        # strategy = DPLoRA( #fl.server.strategy.FedAvg(
+        #     fraction_fit=1.0,
+        #     fraction_evaluate=1.0,
+        #     evaluate_metrics_aggregation_fn=weighted_average,
+        #     min_available_clients=args.num_clients,
+        #     min_fit_clients=args.num_clients,
+        # )
+        strategy = fl.server.strategy.FedAvg(
             fraction_fit=1.0,
             fraction_evaluate=1.0,
             evaluate_metrics_aggregation_fn=weighted_average,
             min_available_clients=args.num_clients,
             min_fit_clients=args.num_clients,
-        )
+            )
     else:
         strategy = fl.server.strategy.FedAvg(
             fraction_fit=1.0,
@@ -216,8 +229,9 @@ if __name__ == "__main__":
     t1 = time.perf_counter()
     history = fl.server.start_server(
         server_address="0.0.0.0:8090",
-        config=fl.server.ServerConfig(num_rounds=args.num_rounds),
+        config=fl.server.ServerConfig(num_rounds=args.num_rounds), #, GRPC_MAX_MESSAGE_LENGTH=2000000000),
         strategy=strategy,
+        grpc_max_message_length = 2000000000,
     )
     t2 = time.perf_counter()
     extra_data = dict(
