@@ -648,6 +648,9 @@ def main():
     #         return float(loss), len(test_data), result_dict #{"accuracy": float(accuracy)}
 
     class DPLoRA_Client(fl.client.NumPyClient):
+        def __init__(self):
+            self.basis = {}
+
         def get_parameters(self, config=None):
             state_dict = get_peft_model_state_dict(net)
             
@@ -687,15 +690,15 @@ def main():
                         _basis = list(torch.topk(torch.norm(prev_state_dict[k].cpu() - v.cpu(), dim=1)[:args.lora_r], args.local_r).indices)
                         projection_basis.append(_basis)
                         self.basis[k] = _basis #"_".join([str(tensor.item()) for tensor in _basis])
-                        print(k)
-                        print(prev_state_dict[k].cpu())
-                        print(v.cpu())
+                        # print(k)
+                        # print(prev_state_dict[k].cpu())
+                        # print(v.cpu())
                         # print(torch.topk(torch.norm(prev_state_dict[k].cpu() - v.cpu(), dim=1, p=2)[:args.lora_r], args.lora_r))
                         # print(torch.topk(torch.norm(prev_state_dict[k].cpu() - v.cpu(), dim=1, p=1)[:args.lora_r], args.lora_r))
-                    if "lora_A" in k:
-                        print(k)
-                        print(prev_state_dict[k].cpu())
-                        print(v.cpu())
+                    # if "lora_A" in k:
+                    #     print(k)
+                    #     print(prev_state_dict[k].cpu())
+                    #     print(v.cpu())
                     #     print(k)
                     #     print(v.cpu())
                     #     # _basis = list(torch.topk(torch.norm(prev_state_dict[k].cpu() - v.cpu(), dim=1)[:args.lora_r], args.local_r).indices)
