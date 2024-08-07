@@ -6,6 +6,8 @@ import torch.nn as nn
 import os
 import numpy as np
 
+from copy import deepcopy
+
 import evaluate
 from evaluate import load as load_metric
 
@@ -412,7 +414,7 @@ def main():
                                              )
             logging.info(f"Client {RANK} Training Started...")
             result = local_trainer.train()
-            print(f"trained on {len(train_data)} number of dataset")
+            # print(f"trained on {len(train_data)} number of dataset")
             print(local_trainer.state.log_history[-2])
             print(local_trainer.state.log_history[-1])
             print(result.metrics)
@@ -489,7 +491,7 @@ def main():
         def evaluate(self, parameters, config):
             self.set_parameters(parameters)
             eval_results = test(net, tokenizer, test_data, 1, args.micro_batch_size)
-            print(eval_results)
+            # print(eval_results)
             loss = eval_results["eval_loss"]
             eval_rouge1 = eval_results["eval_rouge1"]
             eval_rouge2 = eval_results["eval_rouge2"]
@@ -542,20 +544,9 @@ def main():
                     return [range(args.local_r) for _ in range(len(peft_state_dict_keys)//2)]
                 for k, v in state_dict.items():
                     if "lora_B" in k:
-                        _basis = list(torch.topk(torch.norm(prev_state_dict[k].cpu() - v.cpu(), dim=1)[:args.lora_r], args.local_r).indices)
+                        _basis = list(torch.topk(torch.norm(prev_state_dict[k].cpu() - v.cpu(), dim=0)[:args.lora_r], args.local_r).indices)
                         projection_basis.append(_basis)
                         self.basis[k] = _basis #"_".join([str(tensor.item()) for tensor in _basis])
-                        # print(k)
-                        # # print(v.cpu())
-                        # print(torch.topk(torch.norm(prev_state_dict[k].cpu() - v.cpu(), dim=1, p=2)[:args.lora_r], args.lora_r))
-                        # print(torch.topk(torch.norm(prev_state_dict[k].cpu() - v.cpu(), dim=1, p=1)[:args.lora_r], args.lora_r))
-                    # if "lora_A" in k:
-                    #     print(k)
-                    #     print(v.cpu())
-                    #     # _basis = list(torch.topk(torch.norm(prev_state_dict[k].cpu() - v.cpu(), dim=1)[:args.lora_r], args.local_r).indices)
-                    #     # print(k)
-                    #     # print(torch.topk(torch.norm(prev_state_dict[k].cpu() - v.cpu(), dim=1, p=2)[:args.lora_r], args.lora_r))
-                    #     # print(torch.topk(torch.norm(prev_state_dict[k].cpu() - v.cpu(), dim=1, p=1)[:args.lora_r], args.lora_r))
 
             else:
                 projection_basis = [range(args.local_r) for _ in range(len(peft_state_dict_keys)//2)]
@@ -579,9 +570,6 @@ def main():
                 for name, param in net.named_parameters():
                     if "_A" in name:
                         param.requires_grad = False
-                # for name, module in net.named_modules():
-                #     if "_A" in name:
-                #         module.requires_grad = False
 
             local_trainer=build_local_trainer(net=net,
                                               local_train_dataset=train_data,
@@ -597,9 +585,7 @@ def main():
                                              )
             logging.info(f"Client {RANK} Training Started...")
             result = local_trainer.train()
-            # print(f"trained on {len(train_data)} number of dataset")
-            # print(local_trainer.state.log_history[-2])
-            # print(local_trainer.state.log_history[-1])
+            print(f"trained on {len(train_data)} number of dataset")
 
             return self.get_parameters(), len(train_data), {}
 
@@ -618,6 +604,7 @@ def main():
                            }
             return float(loss), len(test_data), result_dict #{"accuracy": float(accuracy)}
 
+
     # Start client
     if args.mode == "hetlora":
         print("starting hetlora")
@@ -627,6 +614,9 @@ def main():
         fl.client.start_client(server_address="127.0.0.1:8090", client=SVDLoRA_Client().to_client())
     elif args.mode == "dplora":
         print("starting dplora")
+        fl.client.start_client(server_address="127.0.0.1:8090", client=DPLoRA_Client().to_client())
+    elif args.mode == "dplora2":
+        print("starting dplora2")
         fl.client.start_client(server_address="127.0.0.1:8090", client=DPLoRA_Client().to_client())
     else:
         print("starting normal lora")

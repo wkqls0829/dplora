@@ -18,6 +18,7 @@ from peft import (
 import numpy as np
 import datetime
 import wandb
+import torch
 
 args = parse_args()
 pretty_print_args(args)
@@ -113,10 +114,10 @@ class DPLoRA(fl.server.strategy.FedAvg):
                 ### decompose
                 #B_dist, E_dist, A_dist = np.linalg.svd(lora_dW, full_matrices=True)
                 
-                import torch
 
                 lora_dW_gpu = torch.tensor(lora_dW, device='cuda')
-                U, S, V = torch.svd(lora_dW_gpu)
+                U, S, Vh = torch.linalg.svd(lora_dW_gpu)
+                V = Vh.mH.T
                 B_dist, E_dist, A_dist = U.cpu().numpy(), S.cpu().numpy(), V.cpu().numpy()
 
                 aggregated_params.append(A_dist[:args.lora_r, :])
@@ -137,6 +138,7 @@ class DPLoRA(fl.server.strategy.FedAvg):
         
         te = time.time()
         print(te - ts)
+
         
         return ndarrays_to_parameters(aggregated_params), {}
 

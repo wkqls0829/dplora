@@ -2,16 +2,16 @@
 
 num_client=3
 data_path=~/lora/FederatedScope/data/1613/
-data_names=(390 399 400)
+data_names=(390_0 399_0 400_0)
 data_name=0
 lora_r=64
-num_rounds=5
+num_rounds=10
 client_epochs=1
 # model=google-bert/bert-base-cased
 model=datajuicer/LLaMA-1B-dj-refine-150B
-mode=hetlora
+mode=dplora
 projection_type=gradient
-learning_rate=1e-5
+learning_rate=1e-3
 
 tid=00000
 
@@ -23,7 +23,7 @@ nohup python -u server.py \
 
 for client in 0 1 2
 do
-    export CUDA_VISIBLE_DEVICES=$((client+2))
+    export CUDA_VISIBLE_DEVICES=$((client+1))
     device=0
     data_name=${data_names[$client]}
     local_r=16
