@@ -511,22 +511,22 @@ def main():
         def get_parameters(self, config=None):
             state_dict = get_peft_model_state_dict(net)
 
-            if config and config.get("transmit_subset", True):
-                try:
-                    projection_basis = self.get_projection_basis()
+        # if config and config.get("transmit_subset", True):
+            try:
+                projection_basis = self.get_projection_basis()
 
-                except AttributeError:
-                    projection_basis = [range(args.local_r) for _ in range(len(peft_state_dict_keys)//2)]
-                    print(f"parameter not set yet")
-                
-                i = 0
-                for k, v in state_dict.items():
-                    if "lora_A" in k:
-                        state_dict[k] = v[projection_basis[i], :].clone()
-                    elif "lora_B" in k:
-                        state_dict[k] = v[:, projection_basis[i]].clone()
-                        i += 1
+            except AttributeError:
+                projection_basis = [range(args.local_r) for _ in range(len(peft_state_dict_keys)//2)]
+                print(f"parameter not set yet")
             
+            i = 0
+            for k, v in state_dict.items():
+                if "lora_A" in k:
+                    state_dict[k] = v[projection_basis[i], :].clone()
+                elif "lora_B" in k:
+                    state_dict[k] = v[:, projection_basis[i]].clone()
+                    i += 1
+        
             return [val.cpu().numpy() for _, val in state_dict.items()]
 
         def get_projection_basis(self):
@@ -601,7 +601,7 @@ def main():
             # print(local_trainer.state.log_history[-2])
             # print(local_trainer.state.log_history[-1])
 
-            return self.get_parameters({"transmit_subset": True}), len(train_data), {}
+            return self.get_parameters(), len(train_data), {}
 
         def evaluate(self, parameters, config):
             self.set_parameters(parameters)

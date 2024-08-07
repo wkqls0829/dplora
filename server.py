@@ -43,10 +43,15 @@ peft_config = LoraConfig(
 
 net = get_peft_model(net, peft_config)
 param_keys = get_peft_model_state_dict(net).keys()
+init_ndarrays = [value.cpu().numpy() for value in get_peft_model_state_dict(net).values()]
 
 del net
 
 class DPLoRA(fl.server.strategy.FedAvg):
+
+    def initialize_parameters(self, client_manager):
+        """Initialize global model parameters."""
+        return fl.common.ndarrays_to_parameters(init_ndarrays)
 
     def configure_fit(self, server_round, parameters, client_manager):
 
@@ -80,58 +85,58 @@ class DPLoRA(fl.server.strategy.FedAvg):
     
     def aggregate_fit(self, rnd, results, failures):
         aggregated_params = []
+
+        # if results:
+        weights_results = []
+        num_examples = []
+        for _, fit_res in results:
+            weights_results.append(parameters_to_ndarrays(fit_res.parameters))
+            num_examples.append(fit_res.num_examples)
+        pprint(num_examples)
+
+        # print(len(weights_results))
+        # print(len(weights_results[0]))
         
-        if results:
-            weights_results = []
-            num_examples = []
-            for _, fit_res in results:
-                weights_results.append(parameters_to_ndarrays(fit_res.parameters))
-                num_examples.append(fit_res.num_examples)
-            pprint(num_examples)
+        ts = time.time()
 
-            # print(len(weights_results))
-            # print(len(weights_results[0]))
-            
-            ts = time.time()
+        for i, key in enumerate(param_keys):
+            if "lora_A" in key:
+                
+                ### dW = B * A
+                for j, (wr, ne) in enumerate(zip(weights_results, num_examples)):
+                    if not j:
+                        lora_dW = ne * (np.dot(wr[i + 1], wr[i]))
+                    else:
+                        lora_dW += ne * (np.dot(wr[i + 1], wr[i]))
+                lora_dW /= sum(num_examples)
+                
+                ### decompose
+                #B_dist, E_dist, A_dist = np.linalg.svd(lora_dW, full_matrices=True)
+                
+                import torch
 
-            for i, key in enumerate(param_keys):
-                if "lora_A" in key:
-                    
-                    ### dW = B * A
-                    for j, (wr, ne) in enumerate(zip(weights_results, num_examples)):
-                        if not j:
-                            lora_dW = ne * (np.dot(wr[i + 1], wr[i]))
-                        else:
-                            lora_dW += ne * (np.dot(wr[i + 1], wr[i]))
-                    lora_dW /= sum(num_examples)
-                    
-                    ### decompose
-                    #B_dist, E_dist, A_dist = np.linalg.svd(lora_dW, full_matrices=True)
-                    
-                    import torch
+                lora_dW_gpu = torch.tensor(lora_dW, device='cuda')
+                U, S, V = torch.svd(lora_dW_gpu)
+                B_dist, E_dist, A_dist = U.cpu().numpy(), S.cpu().numpy(), V.cpu().numpy()
 
-                    lora_dW_gpu = torch.tensor(lora_dW, device='cuda')
-                    U, S, V = torch.svd(lora_dW_gpu)
-                    B_dist, E_dist, A_dist = U.cpu().numpy(), S.cpu().numpy(), V.cpu().numpy()
-
-                    aggregated_params.append(A_dist[:args.lora_r, :])
-                    aggregated_params.append(B_dist[:, :args.lora_r] * E_dist[:args.lora_r])
+                aggregated_params.append(A_dist[:args.lora_r, :])
+                aggregated_params.append(B_dist[:, :args.lora_r] * E_dist[:args.lora_r])
 
 
-                elif ("weight" in key or "bias" in key) and ("lora_B" not in key) :
-                    print(key)
-                    
-                    ### Same as FedAvg
-                    for j, (wr, ne) in enumerate(zip(weights_results, num_examples)):
-                        if not j:
-                            dW = ne * wr[i]
-                        else:
-                            dW += ne * wr[i]
-                    dW /= sum(num_examples)
-                    aggregated_params.append(dW)
-            
-            te = time.time()
-            print(te - ts)
+            elif ("weight" in key or "bias" in key) and ("lora_B" not in key) :
+                print(key)
+                
+                ### Same as FedAvg
+                for j, (wr, ne) in enumerate(zip(weights_results, num_examples)):
+                    if not j:
+                        dW = ne * wr[i]
+                    else:
+                        dW += ne * wr[i]
+                dW /= sum(num_examples)
+                aggregated_params.append(dW)
+        
+        te = time.time()
+        print(te - ts)
         
         return ndarrays_to_parameters(aggregated_params), {}
 
