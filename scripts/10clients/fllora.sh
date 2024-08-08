@@ -5,16 +5,16 @@ data_path=~/lora/FederatedScope/data/1613/
 data_names=(390_0 390_1 396_0 396_1 399_0 399_1 400_0 400_1 401_0 401_1)
 data_name=10clients
 lora_r=64
-num_rounds=20
+num_rounds=30
 client_epochs=1
-learning_rate=1e-4
+learning_rate=1e-3
 
 model=datajuicer/LLaMA-1B-dj-refine-150B
 mode=base
 projection_type=gradient
 local_ranks=(16 16 16 16 16 16 16 16 16 16)
 
-tid=19303
+tid=20303
 
 export CUDA_VISIBLE_DEVICES=4
 nohup python -u server.py \

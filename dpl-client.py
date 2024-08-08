@@ -524,9 +524,15 @@ def main():
             i = 0
             for k, v in state_dict.items():
                 if "lora_A" in k:
-                    state_dict[k] = v[projection_basis[i], :].clone()
+                    state_dict[k] = v.clone()
+                    for j in range(v.shape[0]):
+                        if j not in projection_basis[i]:
+                            state_dict[k][j,:] = 0
                 elif "lora_B" in k:
-                    state_dict[k] = v[:, projection_basis[i]].clone()
+                    state_dict[k] = v.clone()
+                    for j in range(v.shape[1]):
+                        if j not in projection_basis[i]:
+                            state_dict[k][:,j] = 0
                     i += 1
         
             return [val.cpu().numpy() for _, val in state_dict.items()]
@@ -547,6 +553,29 @@ def main():
                         _basis = list(torch.topk(torch.norm(prev_state_dict[k].cpu() - v.cpu(), dim=0)[:args.lora_r], args.local_r).indices)
                         projection_basis.append(_basis)
                         self.basis[k] = _basis #"_".join([str(tensor.item()) for tensor in _basis])
+            elif "BA_mag" in args.projection_type:
+                state_dict = get_peft_model_state_dict(net)
+                prev_state_dict = self.state_dict_mem
+                if not prev_state_dict:
+                    return [range(args.local_r) for _ in range(len(peft_state_dict_keys)//2)]
+                for k, v in state_dict.items():
+                    if "lora_A" in k:
+                        A_v = v
+                    elif "lora_B" in k:
+                        dB = prev_state_dict[k].cpu() - v.cpu()
+                        dBA_mag = []
+                        for i in range(dB.shape[1]):
+                            if "1" in args.projection_type:
+                                dBA_mag.append(torch.linalg.matrix_norm(dB[:,i].unsqueeze(dim=1) @ A_v[i,:].unsqueeze(dim=0).cpu()), ord=1)
+                            if "2" in args.projection_type:
+                                dBA_mag.append(torch.linalg.matrix_norm(dB[:,i].unsqueeze(dim=1) @ A_v[i,:].unsqueeze(dim=0).cpu()), ord=2)
+                            else:
+                                dBA_mag.append(torch.linalg.matrix_norm(dB[:,i].unsqueeze(dim=1) @ A_v[i,:].unsqueeze(dim=0).cpu()))
+                        _basis = list(torch.topk(torch.Tensor(dBA_mag), args.local_r).indices)
+                        projection_basis.append(_basis)
+                        self.basis[k] = _basis #"_".join([str(tensor.item()) for tensor in _basis])
+
+
 
             else:
                 projection_basis = [range(args.local_r) for _ in range(len(peft_state_dict_keys)//2)]

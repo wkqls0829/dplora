@@ -51,6 +51,7 @@ del net
 class DPLoRA(fl.server.strategy.FedAvg):
 
     def initialize_parameters(self, client_manager):
+        self.previous_params=[]
         """Initialize global model parameters."""
         return fl.common.ndarrays_to_parameters(init_ndarrays)
 
@@ -101,10 +102,14 @@ class DPLoRA(fl.server.strategy.FedAvg):
         ts = time.time()
 
         for i, key in enumerate(param_keys):
-            if "lora_A" in key:
-                
+            if "lora_A" in key: 
                 ### dW = B * A
                 for j, (wr, ne) in enumerate(zip(weights_results, num_examples)):
+                    if self.previous_params:
+                        for ind in range(wr[i].shape[0]):
+                            if wr[i+1][:,ind].all() == 0:
+                                wr[i][ind,:] = self.previous_params[i][ind,:]
+                                wr[i+1][:,ind] = self.previous_params[i+1][:,ind]
                     if not j:
                         lora_dW = ne * (np.dot(wr[i + 1], wr[i]))
                     else:
@@ -138,6 +143,7 @@ class DPLoRA(fl.server.strategy.FedAvg):
         
         te = time.time()
         print(te - ts)
+        self.previous_params = aggregated_params
 
         
         return ndarrays_to_parameters(aggregated_params), {}
