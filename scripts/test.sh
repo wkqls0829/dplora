@@ -4,7 +4,7 @@ num_client=3
 data_path=~/lora/FederatedScope/data/1613/
 data_names=(390_0 399_0 400_0)
 data_name=0
-lora_r=8
+lora_r=64
 num_rounds=10
 client_epochs=1
 # model=google-bert/bert-base-cased
@@ -26,7 +26,7 @@ do
     export CUDA_VISIBLE_DEVICES=$((client+1))
     device=0
     data_name=${data_names[$client]}
-    local_r=4
+    local_r=8
     nohup python -u dpl-client.py \
         --num_client $num_client --data_path $data_path --data_name $data_name --rank $client \
         --num_rounds $num_rounds --client_epochs $client_epochs --client_ckpt $model \
