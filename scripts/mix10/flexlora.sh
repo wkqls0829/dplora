@@ -5,19 +5,19 @@ data_path=~/lora/FederatedScope/data/1613/
 data_names=(549_0 549_1 1514_0 1514_1 1400_0 1400_1 399_0 399_1 1001_0 1001_1)
 data_name=10clients
 lora_r=64
-num_rounds=20
+num_rounds=30
 client_epochs=1
-learning_rate=1e-4
+learning_rate=5e-4
 
 model=datajuicer/LLaMA-1B-dj-refine-150B
 mode=dplora
 projection_type=base
-local_ranks=(16 16 16 16 16 16 16 16 16 16)
+local_ranks=(16 8 16 8 16 8 16 8 16 8) #(17 8 17 8 17 8 17 8 17 8) #(32 17 32 17 32 17 32 17 32 17) #(64 32 64 32 64 32 64 32 64 32) #(16 8 16 8 16 8 16 8 16 8) #(16 16 16 16 16 16 16 16 16 16) #(16 8 16 8 16 8 16 8 16 8)
 
 tid=20502
 
 export CUDA_VISIBLE_DEVICES=4
-nohup python -u server.py \
+nohup python -u server2.py \
     --num_client $num_client --data_name $data_name --rank 0 \
     --num_rounds $num_rounds --client_epochs $client_epochs --client_ckpt $model \
     --mode $mode --lora_r $lora_r --client_lr $learning_rate --tid $tid \
@@ -30,7 +30,7 @@ do
     data_name=${data_names[$client]}
     # local_r=16
     local_r=${local_ranks[$client]}
-    nohup python -u dpl-client.py \
+    nohup python -u dpl-client2.py \
         --num_client $num_client --data_path $data_path --data_name $data_name --rank $client \
         --num_rounds $num_rounds --client_epochs $client_epochs --client_ckpt $model \
         --mode $mode --lora_r $lora_r --local_r $local_r --client_lr $learning_rate \
